@@ -1,0 +1,30 @@
+[package]
+name = "repos-control"
+version = "26.9.4"
+description = "Repos Control - desktop panel for git repositories"
+authors = ["repos-control"]
+edition = "2021"
+rust-version = "1.72"
+
+[lib]
+name = "repos_control_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+# production builds (tauri-build: dev = !custom-protocol). Без этой фичи
+# cargo собирает dev-бинарник, который грузит devUrl вместо вшитых ассетов.
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0.0", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-logs = { path = "../../my-tauri-plugins/tauri-plugin-logs" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+log = "0.4"
+time = { version = "0.3", features = ["formatting"] }
+gix = { version = "0.87", default-features = true }

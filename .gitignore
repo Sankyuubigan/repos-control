@@ -1,0 +1,10 @@
+/target
+src-tauri/target
+node_modules
+.DS_Store
+test/last_logs.txt
+test/temp/
+*.log
+src-tauri/Cargo.lock
+/tasks
+/test

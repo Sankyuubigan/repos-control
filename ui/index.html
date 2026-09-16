@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Repos Control</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Repos Control</h1>
+      <span class="subtitle">панель контроля git-репозиториев</span>
+    </div>
+    <div class="topbar-actions">
+      <button id="btn-refresh" class="btn">Обновить</button>
+      <button id="btn-add" class="btn btn-primary">Добавить проект</button>
+    </div>
+  </header>
+
+  <nav class="tabbar">
+    <button class="tab-btn active" data-tab="projects">Проекты</button>
+    <button class="tab-btn" data-tab="logs">Логи</button>
+  </nav>
+
+  <div id="tab-projects" class="tab-pane">
+    <main id="project-list" class="project-list"></main>
+    <div id="empty-state" class="empty-state hidden">
+      <p>Нет добавленных проектов.</p>
+      <p>Нажмите «Добавить проект», чтобы выбрать папку репозитория.</p>
+    </div>
+  </div>
+
+  <div id="tab-logs" class="tab-pane hidden">
+    <logs-panel></logs-panel>
+  </div>
+
+  <div id="modal-backdrop" class="modal-backdrop hidden">
+    <div class="modal">
+      <div class="modal-title" id="modal-title">Сообщение</div>
+      <pre id="modal-body" class="modal-body"></pre>
+      <div class="modal-actions" id="modal-actions">
+        <button id="btn-copy" class="btn btn-primary">Скопировать</button>
+        <button id="btn-close" class="btn">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
