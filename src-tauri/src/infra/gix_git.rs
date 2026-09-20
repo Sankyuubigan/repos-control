@@ -36,6 +36,9 @@ impl GitApi for GixGit {
             _ => (0, 0, false),
         };
         let changed_files = collect_changed_files(&snap);
+        let staged_files = direct_changed_files(&snap.staged, 'A');
+        let mut unstaged_files = direct_changed_files(&snap.unstaged, 'M');
+        unstaged_files.extend(direct_changed_files(&snap.untracked, 'U'));
         Ok(ProjectStatus {
             is_repo: true,
             branch: snap.branch,
@@ -46,6 +49,8 @@ impl GitApi for GixGit {
             unstaged: snap.unstaged.len(),
             untracked: snap.untracked.len(),
             changed_files,
+            staged_files,
+            unstaged_files,
             error: None,
         })
     }
@@ -213,6 +218,26 @@ fn change_kind_char(kind: ChangeKind) -> char {
         ChangeKind::Modified => 'M',
         ChangeKind::Removed => 'D',
     }
+}
+
+fn direct_changed_files(changes: &[FileChange], untracked_status: char) -> Vec<ChangedFile> {
+    changes
+        .iter()
+        .map(|change| {
+            let status = if change.kind == ChangeKind::Added
+                && change.old_oid.is_none()
+                && change.new_oid.is_none()
+            {
+                untracked_status
+            } else {
+                change_kind_char(change.kind)
+            };
+            ChangedFile {
+                path: change.path.clone(),
+                status: status.to_string(),
+            }
+        })
+        .collect()
 }
 
 fn push_tree_index(change: &gix::diff::index::ChangeRef, staged: &mut Vec<FileChange>) {

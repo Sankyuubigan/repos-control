@@ -19,6 +19,8 @@ pub struct ProjectStatus {
     pub unstaged: usize,
     pub untracked: usize,
     pub changed_files: Vec<ChangedFile>,
+    pub staged_files: Vec<ChangedFile>,
+    pub unstaged_files: Vec<ChangedFile>,
     pub error: Option<String>,
 }
 
@@ -41,6 +43,8 @@ impl Default for ProjectStatus {
             unstaged: 0,
             untracked: 0,
             changed_files: Vec::new(),
+            staged_files: Vec::new(),
+            unstaged_files: Vec::new(),
             error: None,
         }
     }

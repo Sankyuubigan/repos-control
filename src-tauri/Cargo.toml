@@ -1,6 +1,6 @@
 [package]
 name = "repos-control"
-version = "26.9.4"
+version = "26.9.6"
 description = "Repos Control - desktop panel for git repositories"
 authors = ["repos-control"]
 edition = "2021"
@@ -28,3 +28,4 @@ anyhow = "1"
 log = "0.4"
 time = { version = "0.3", features = ["formatting"] }
 gix = { version = "0.87", default-features = true }
+git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2", "https", "ssh"] }

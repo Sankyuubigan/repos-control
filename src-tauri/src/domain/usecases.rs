@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::domain::commit_prompt;
-use crate::domain::contracts::{CommitMessageProvider, ConfigStore, GitApi};
+use crate::domain::contracts::{CommitMessageProvider, ConfigStore, GitApi, GitWriteApi};
 use crate::domain::project::{Project, ProjectStatus};
 
 pub fn list_projects<C: ConfigStore + ?Sized>(store: &C) -> Vec<Project> {
@@ -58,4 +58,81 @@ pub fn remove_project<C: ConfigStore + ?Sized>(store: &C, path: &Path) -> Result
         log::error!("remove_project failed: {err:#}");
         format!("Не удалось удалить проект: {err}")
     })
+}
+
+fn write_error(label: &str, project_path: &Path, err: anyhow::Error) -> String {
+    log::error!("{label} failed for {}: {err:#}", project_path.display());
+    format!("{label}: {err}")
+}
+
+pub fn stage_files<W: GitWriteApi + ?Sized>(
+    git: &W,
+    project_path: &Path,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    git.stage(project_path, &paths)
+        .map_err(|err| write_error("Не удалось проиндексировать", project_path, err))
+}
+
+pub fn unstage_files<W: GitWriteApi + ?Sized>(
+    git: &W,
+    project_path: &Path,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    git.unstage(project_path, &paths)
+        .map_err(|err| write_error("Не удалось снять с индекса", project_path, err))
+}
+
+pub fn discard_files<W: GitWriteApi + ?Sized>(
+    git: &W,
+    project_path: &Path,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    git.discard(project_path, &paths)
+        .map_err(|err| write_error("Не удалось откатить изменения", project_path, err))
+}
+
+pub fn commit_changes<W: GitWriteApi + ?Sized>(
+    git: &W,
+    project_path: &Path,
+    message: &str,
+) -> Result<(), String> {
+    if message.trim().is_empty() {
+        return Err("Сообщение коммита пустое".to_string());
+    }
+    git.commit(project_path, message)
+        .map_err(|err| write_error("Не удалось создать коммит", project_path, err))
+}
+
+pub fn push_changes<W: GitWriteApi + ?Sized>(
+    git: &W,
+    project_path: &Path,
+) -> Result<(), String> {
+    git.push(project_path)
+        .map_err(|err| write_error("Не удалось выполнить push", project_path, err))
+}
+
+pub fn read_commit_message<W: GitWriteApi + ?Sized>(
+    git: &W,
+    project_path: &Path,
+) -> String {
+    match git.read_commit_message(project_path) {
+        Ok(text) => text,
+        Err(err) => {
+            log::warn!(
+                "read_commit_message failed for {}: {err:#}",
+                project_path.display()
+            );
+            String::new()
+        }
+    }
+}
+
+pub fn write_commit_message<W: GitWriteApi + ?Sized>(
+    git: &W,
+    project_path: &Path,
+    message: &str,
+) -> Result<(), String> {
+    git.write_commit_message(project_path, message)
+        .map_err(|err| write_error("Не удалось сохранить COMMIT_EDITMSG", project_path, err))
 }

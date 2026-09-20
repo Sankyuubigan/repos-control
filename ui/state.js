@@ -4,6 +4,9 @@ export const state = {
   filesOpen: new Set(),
   activeTab: 'projects',
   busy: false,
+  panelPath: null,
+  panelMessage: '',
+  panelSaveTimer: null,
 };
 
 export function setProjects(projects) {

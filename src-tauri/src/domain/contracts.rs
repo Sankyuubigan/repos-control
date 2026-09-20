@@ -16,3 +16,13 @@ pub trait GitApi: Send + Sync {
 pub trait CommitMessageProvider: Send + Sync {
     fn generate(&self, prompt: &str) -> Result<String, anyhow::Error>;
 }
+
+pub trait GitWriteApi: Send + Sync {
+    fn stage(&self, project_path: &Path, paths: &[String]) -> Result<(), anyhow::Error>;
+    fn unstage(&self, project_path: &Path, paths: &[String]) -> Result<(), anyhow::Error>;
+    fn discard(&self, project_path: &Path, paths: &[String]) -> Result<(), anyhow::Error>;
+    fn commit(&self, project_path: &Path, message: &str) -> Result<(), anyhow::Error>;
+    fn push(&self, project_path: &Path) -> Result<(), anyhow::Error>;
+    fn read_commit_message(&self, project_path: &Path) -> Result<String, anyhow::Error>;
+    fn write_commit_message(&self, project_path: &Path, message: &str) -> Result<(), anyhow::Error>;
+}

@@ -40,6 +40,13 @@ pub fn run() {
             api::commands::get_project_status,
             api::commands::generate_commit_message,
             api::commands::pick_project_folder,
+            api::commands::stage_files,
+            api::commands::unstage_files,
+            api::commands::discard_files,
+            api::commands::commit_changes,
+            api::commands::push_changes,
+            api::commands::read_commit_message,
+            api::commands::write_commit_message,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

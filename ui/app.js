@@ -8,6 +8,7 @@ import {
   showModal,
   hideModal,
 } from './render.js';
+import { bindCommitPanelHandlers, openCommitPanel, refreshPanel } from './commitPanel.js';
 
 async function refreshStatuses() {
   const paths = state.projects.map((p) => p.path);
@@ -33,6 +34,9 @@ async function refreshAll() {
     setProjects(projects);
     renderProjectList();
     await refreshStatuses();
+    if (state.panelPath) {
+      await refreshPanel();
+    }
   } catch (err) {
     api.logFront(`[refreshAll] ${String(err)}`);
   } finally {
@@ -89,6 +93,9 @@ function onListClick(event) {
   switch (btn.dataset.action) {
     case 'generate':
       onGenerate(path);
+      break;
+    case 'open-panel':
+      openCommitPanel(path);
       break;
     case 'remove':
       onRemoveProject(path);
@@ -147,6 +154,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('project-list').addEventListener('click', onListClick);
   document.querySelector('.topbar-actions').addEventListener('click', onTopBarClick);
   document.querySelector('.tabbar').addEventListener('click', onTabClick);
+  bindCommitPanelHandlers();
   document.getElementById('modal-backdrop').addEventListener('click', (event) => {
     if (event.target === event.currentTarget) {
       hideModal();

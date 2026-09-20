@@ -3,7 +3,7 @@ import { state } from './state.js';
 const listEl = document.getElementById('project-list');
 const emptyEl = document.getElementById('empty-state');
 
-function esc(text) {
+export function esc(text) {
   const div = document.createElement('div');
   div.textContent = String(text);
   return div.innerHTML;
@@ -39,7 +39,7 @@ function renderStatus(path) {
   return badges.join('');
 }
 
-function projectName(path) {
+export function projectName(path) {
   const trimmed = String(path).replace(/[\\/]+$/, '');
   const i = Math.max(trimmed.lastIndexOf('\\'), trimmed.lastIndexOf('/'));
   return i >= 0 ? trimmed.slice(i + 1) : trimmed;
@@ -54,6 +54,7 @@ function projectCard(project) {
         <div class="project-path" title="${esc(path)}">${esc(path)}</div>
       </div>
       <div class="project-actions">
+        <button class="btn btn-generation" data-action="open-panel" data-path="${esc(path)}" title="Открыть панель коммита">Панель коммита</button>
         <button class="btn btn-generation" data-action="generate" data-path="${esc(path)}">Сгенерировать сообщение</button>
         <button class="btn" data-action="remove" data-path="${esc(path)}">Удалить</button>
       </div>
