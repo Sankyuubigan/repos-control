@@ -12,6 +12,10 @@ export function removeProject(path) {
   return invoke('remove_project', { path });
 }
 
+export function reorderProjects(paths) {
+  return invoke('reorder_projects', { paths });
+}
+
 export function pickProjectFolder() {
   return invoke('pick_project_folder');
 }

@@ -37,6 +37,7 @@ pub fn run() {
             api::commands::list_projects,
             api::commands::add_project,
             api::commands::remove_project,
+            api::commands::reorder_projects,
             api::commands::get_project_status,
             api::commands::generate_commit_message,
             api::commands::pick_project_folder,

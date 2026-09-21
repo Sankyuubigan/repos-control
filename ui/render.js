@@ -45,8 +45,10 @@ export function projectName(path) {
   return i >= 0 ? trimmed.slice(i + 1) : trimmed;
 }
 
-function projectCard(project) {
+function projectCard(project, index) {
   const path = project.path;
+  const first = index === 0;
+  const last = index === state.projects.length - 1;
   return `<div class="project-card" data-path="${esc(path)}">
     <div class="project-head">
       <div>
@@ -54,8 +56,11 @@ function projectCard(project) {
         <div class="project-path" title="${esc(path)}">${esc(path)}</div>
       </div>
       <div class="project-actions">
+        <div class="project-move">
+          <button class="btn btn-tiny" data-action="move-up" data-path="${esc(path)}" title="Выше" ${first ? 'disabled' : ''}>↑</button>
+          <button class="btn btn-tiny" data-action="move-down" data-path="${esc(path)}" title="Ниже" ${last ? 'disabled' : ''}>↓</button>
+        </div>
         <button class="btn btn-generation" data-action="open-panel" data-path="${esc(path)}" title="Открыть панель коммита">Панель коммита</button>
-        <button class="btn btn-generation" data-action="generate" data-path="${esc(path)}">Сгенерировать сообщение</button>
         <button class="btn" data-action="remove" data-path="${esc(path)}">Удалить</button>
       </div>
     </div>
@@ -76,7 +81,8 @@ function renderFiles(path) {
   const items = files
     .map((f) => {
       const s = String(f.status).toUpperCase();
-      return `<div class="file-row"><span class="file-status file-status-${esc(s)}">${esc(s)}</span><span class="file-path-item">${esc(f.path)}</span></div>`;
+      const deleted = s === 'D' ? ' is-deleted' : '';
+      return `<div class="file-row"><span class="file-status file-status-${esc(s)}">${esc(s)}</span><span class="file-path-item${deleted}">${esc(f.path)}</span></div>`;
     })
     .join('');
   return `<div class="files-block">
@@ -92,7 +98,7 @@ export function renderProjectList() {
     return;
   }
   emptyEl.classList.add('hidden');
-  listEl.innerHTML = state.projects.map(projectCard).join('');
+  listEl.innerHTML = state.projects.map((project, index) => projectCard(project, index)).join('');
 }
 
 export function renderStatusSlot(path) {

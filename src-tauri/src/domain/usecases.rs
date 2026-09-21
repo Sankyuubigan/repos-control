@@ -1,7 +1,9 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::domain::commit_prompt;
-use crate::domain::contracts::{CommitMessageProvider, ConfigStore, GitApi, GitWriteApi};
+use crate::domain::contracts::{
+    CommitDraftStore, CommitMessageProvider, ConfigStore, GitApi, GitWriteApi,
+};
 use crate::domain::project::{Project, ProjectStatus};
 
 pub fn list_projects<C: ConfigStore + ?Sized>(store: &C) -> Vec<Project> {
@@ -60,6 +62,16 @@ pub fn remove_project<C: ConfigStore + ?Sized>(store: &C, path: &Path) -> Result
     })
 }
 
+pub fn reorder_projects<C: ConfigStore + ?Sized>(
+    store: &C,
+    paths: &[PathBuf],
+) -> Result<(), String> {
+    store.reorder_projects(paths).map_err(|err| {
+        log::error!("reorder_projects failed: {err:#}");
+        format!("Не удалось изменить порядок проектов: {err}")
+    })
+}
+
 fn write_error(label: &str, project_path: &Path, err: anyhow::Error) -> String {
     log::error!("{label} failed for {}: {err:#}", project_path.display());
     format!("{label}: {err}")
@@ -92,8 +104,9 @@ pub fn discard_files<W: GitWriteApi + ?Sized>(
         .map_err(|err| write_error("Не удалось откатить изменения", project_path, err))
 }
 
-pub fn commit_changes<W: GitWriteApi + ?Sized>(
+pub fn commit_changes<W: GitWriteApi + ?Sized, D: CommitDraftStore + ?Sized>(
     git: &W,
+    drafts: &D,
     project_path: &Path,
     message: &str,
 ) -> Result<(), String> {
@@ -101,7 +114,11 @@ pub fn commit_changes<W: GitWriteApi + ?Sized>(
         return Err("Сообщение коммита пустое".to_string());
     }
     git.commit(project_path, message)
-        .map_err(|err| write_error("Не удалось создать коммит", project_path, err))
+        .map_err(|err| write_error("Не удалось создать коммит", project_path, err))?;
+    if let Err(err) = drafts.clear_draft(project_path) {
+        log::warn!("Не удалось очистить черновик {}: {err:#}", project_path.display());
+    }
+    Ok(())
 }
 
 pub fn push_changes<W: GitWriteApi + ?Sized>(
@@ -112,15 +129,15 @@ pub fn push_changes<W: GitWriteApi + ?Sized>(
         .map_err(|err| write_error("Не удалось выполнить push", project_path, err))
 }
 
-pub fn read_commit_message<W: GitWriteApi + ?Sized>(
-    git: &W,
+pub fn read_commit_message<D: CommitDraftStore + ?Sized>(
+    drafts: &D,
     project_path: &Path,
 ) -> String {
-    match git.read_commit_message(project_path) {
+    match drafts.read_draft(project_path) {
         Ok(text) => text,
         Err(err) => {
             log::warn!(
-                "read_commit_message failed for {}: {err:#}",
+                "read_draft failed for {}: {err:#}",
                 project_path.display()
             );
             String::new()
@@ -128,11 +145,12 @@ pub fn read_commit_message<W: GitWriteApi + ?Sized>(
     }
 }
 
-pub fn write_commit_message<W: GitWriteApi + ?Sized>(
-    git: &W,
+pub fn write_commit_message<D: CommitDraftStore + ?Sized>(
+    drafts: &D,
     project_path: &Path,
     message: &str,
 ) -> Result<(), String> {
-    git.write_commit_message(project_path, message)
-        .map_err(|err| write_error("Не удалось сохранить COMMIT_EDITMSG", project_path, err))
+    drafts
+        .write_draft(project_path, message)
+        .map_err(|err| write_error("Не удалось сохранить черновик", project_path, err))
 }

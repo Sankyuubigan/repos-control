@@ -4,27 +4,33 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::domain::contracts::{
-    CommitMessageProvider, ConfigStore, GitApi, GitWriteApi,
+    CommitDraftStore, CommitMessageProvider, ConfigStore, GitApi, GitWriteApi,
 };
 use crate::domain::project::{Project, ProjectStatus};
 use crate::domain::usecases;
-use crate::infra::{FileConfigStore, Git2Write, GixGit, StubCommitProvider};
+use crate::infra::{
+    FileCommitDraftStore, FileConfigStore, Git2Write, GixGit, StubCommitProvider,
+};
 
 pub struct Services {
     pub config: Arc<dyn ConfigStore>,
     pub git: Arc<dyn GitApi>,
     pub write_git: Arc<dyn GitWriteApi>,
     pub provider: Arc<dyn CommitMessageProvider>,
+    pub draft_store: Arc<dyn CommitDraftStore>,
 }
 
 impl Services {
     pub fn new() -> Result<Self, String> {
         let config = FileConfigStore::new().map_err(|err| format!("config init: {err:#}"))?;
+        let draft_store =
+            FileCommitDraftStore::new().map_err(|err| format!("draft store init: {err:#}"))?;
         Ok(Self {
             config: Arc::new(config),
             git: Arc::new(GixGit),
             write_git: Arc::new(Git2Write),
             provider: Arc::new(StubCommitProvider),
+            draft_store: Arc::new(draft_store),
         })
     }
 }
@@ -42,6 +48,15 @@ pub fn add_project(services: State<'_, Services>, path: String) -> Result<(), St
 #[tauri::command]
 pub fn remove_project(services: State<'_, Services>, path: String) -> Result<(), String> {
     usecases::remove_project(&*services.config, Path::new(&path))
+}
+
+#[tauri::command]
+pub fn reorder_projects(
+    services: State<'_, Services>,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    let paths: Vec<std::path::PathBuf> = paths.into_iter().map(std::path::PathBuf::from).collect();
+    usecases::reorder_projects(&*services.config, &paths)
 }
 
 #[tauri::command]
@@ -146,10 +161,17 @@ pub async fn commit_changes(
     message: String,
 ) -> Result<(), String> {
     let write_git = Arc::clone(&services.inner().write_git);
-    run_write(write_git, project_path, move |git, path| {
-        usecases::commit_changes(git, path, &message)
+    let draft_store = Arc::clone(&services.inner().draft_store);
+    tauri::async_runtime::spawn_blocking(move || {
+        usecases::commit_changes(
+            write_git.as_ref(),
+            draft_store.as_ref(),
+            Path::new(&project_path),
+            &message,
+        )
     })
     .await
+    .map_err(|err| format!("Ошибка фоновой задачи: {err}"))?
 }
 
 #[tauri::command]
@@ -169,10 +191,10 @@ pub async fn read_commit_message(
     services: State<'_, Services>,
     project_path: String,
 ) -> Result<String, String> {
-    let write_git = Arc::clone(&services.inner().write_git);
+    let draft_store = Arc::clone(&services.inner().draft_store);
     tauri::async_runtime::spawn_blocking(move || {
         Ok(usecases::read_commit_message(
-            write_git.as_ref(),
+            draft_store.as_ref(),
             Path::new(&project_path),
         ))
     })
@@ -186,9 +208,9 @@ pub async fn write_commit_message(
     project_path: String,
     message: String,
 ) -> Result<(), String> {
-    let write_git = Arc::clone(&services.inner().write_git);
+    let draft_store = Arc::clone(&services.inner().draft_store);
     tauri::async_runtime::spawn_blocking(move || {
-        usecases::write_commit_message(write_git.as_ref(), Path::new(&project_path), &message)
+        usecases::write_commit_message(draft_store.as_ref(), Path::new(&project_path), &message)
     })
     .await
     .map_err(|err| format!("Ошибка фоновой задачи: {err}"))?

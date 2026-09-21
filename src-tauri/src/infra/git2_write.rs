@@ -10,11 +10,13 @@ pub struct Git2Write;
 impl GitWriteApi for Git2Write {
     fn stage(&self, project_path: &Path, paths: &[String]) -> Result<()> {
         let repo = open_repo(project_path)?;
+        let workdir = repo
+            .workdir()
+            .context("у репозитория нет рабочего дерева")?
+            .to_path_buf();
         let mut index = repo.index().context("открыть индекс")?;
         for path in paths {
-            index
-                .add_path(Path::new(path))
-                .with_context(|| format!("добавить в индекс: {path}"))?;
+            stage_path(&mut index, &workdir, Path::new(path))?;
         }
         index.write().context("записать индекс")?;
         log::info!("stage: {} файл(ов) в {}", paths.len(), project_path.display());
@@ -80,7 +82,6 @@ impl GitWriteApi for Git2Write {
         let oid = repo
             .commit(Some("HEAD"), &signature, &signature, message, &tree, &parent_refs)
             .context("создать коммит")?;
-        clear_commit_editmsg(&repo);
         log::info!(
             "commit {oid} в {}: {}",
             project_path.display(),
@@ -128,30 +129,33 @@ impl GitWriteApi for Git2Write {
         log::info!("push {branch} -> origin в {}", project_path.display());
         Ok(())
     }
-
-    fn read_commit_message(&self, project_path: &Path) -> Result<String> {
-        let repo = open_repo(project_path)?;
-        let path = repo.path().join("COMMIT_EDITMSG");
-        match fs::read_to_string(&path) {
-            Ok(text) => Ok(text),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-            Err(err) => {
-                Err(anyhow::Error::new(err).context(format!("прочитать {}", path.display())))
-            }
-        }
-    }
-
-    fn write_commit_message(&self, project_path: &Path, message: &str) -> Result<()> {
-        let repo = open_repo(project_path)?;
-        let path = repo.path().join("COMMIT_EDITMSG");
-        fs::write(&path, message).with_context(|| format!("записать {}", path.display()))?;
-        Ok(())
-    }
 }
 
 fn open_repo(path: &Path) -> Result<git2::Repository> {
     git2::Repository::open(path)
         .with_context(|| format!("открыть git-репозиторий: {}", path.display()))
+}
+
+fn stage_path(index: &mut git2::Index, workdir: &Path, path: &Path) -> Result<()> {
+    if workdir.join(path).exists() {
+        index
+            .add_path(path)
+            .with_context(|| format!("добавить в индекс: {}", path.display()))?;
+        return Ok(());
+    }
+    if index.get_path(path, 0).is_some() {
+        // Файл удалён с диска, но есть в индексе — стадим удаление,
+        // как это делает `git add` для трекаемого удалённого файла.
+        index
+            .remove_path(path)
+            .with_context(|| format!("удалить из индекса: {}", path.display()))?;
+        log::info!("stage (удаление): {}", path.display());
+        return Ok(());
+    }
+    bail!(
+        "файл не найден на диске и отсутствует в индексе: {}",
+        path.display()
+    )
 }
 
 fn remove_worktree_entry(workdir: &Path, rel: &str) -> Result<()> {
@@ -167,15 +171,6 @@ fn remove_worktree_entry(workdir: &Path, rel: &str) -> Result<()> {
     }
     log::info!("удалён untracked {}", target.display());
     Ok(())
-}
-
-fn clear_commit_editmsg(repo: &git2::Repository) {
-    let path = repo.path().join("COMMIT_EDITMSG");
-    if path.exists() {
-        if let Err(err) = fs::remove_file(&path) {
-            log::warn!("не удалось удалить {}: {err}", path.display());
-        }
-    }
 }
 
 fn first_line(message: &str) -> &str {
@@ -283,7 +278,7 @@ mod tests {
     }
 
     #[test]
-    fn commit_creates_head_and_clears_editmsg() {
+    fn commit_creates_head() {
         let tmp = TempRepo::new();
         let repo = tmp.repo();
         tmp.write("a.txt", "hello");
@@ -293,25 +288,6 @@ mod tests {
 
         let head = repo.head().expect("head");
         assert!(head.target().is_some());
-        assert!(!repo.path().join("COMMIT_EDITMSG").exists());
-    }
-
-    #[test]
-    fn commit_message_roundtrip() {
-        let tmp = TempRepo::new();
-        tmp.repo();
-        let write = Git2Write;
-        write
-            .write_commit_message(&tmp.path, "draft message")
-            .expect("write");
-        assert_eq!(
-            write.read_commit_message(&tmp.path).expect("read"),
-            "draft message"
-        );
-
-        let missing = TempRepo::new();
-        missing.repo();
-        assert_eq!(write.read_commit_message(&missing.path).expect("read"), "");
     }
 
     #[test]
@@ -339,5 +315,41 @@ mod tests {
         write.discard(&tmp.path, &paths(&["a.txt"])).expect("discard");
         let content = fs::read_to_string(tmp.path.join("a.txt")).expect("read");
         assert_eq!(content, "original");
+    }
+
+    #[test]
+    fn stage_records_deletion_of_removed_tracked_file() {
+        let tmp = TempRepo::new();
+        let repo = tmp.repo();
+        tmp.write("a.txt", "hello");
+        let write = Git2Write;
+        write.stage(&tmp.path, &paths(&["a.txt"])).expect("stage");
+        write.commit(&tmp.path, "init").expect("commit");
+        fs::remove_file(tmp.path.join("a.txt")).expect("remove file");
+
+        write.stage(&tmp.path, &paths(&["a.txt"])).expect("stage deletion");
+        let status = repo.status_file(Path::new("a.txt")).expect("status");
+        assert!(status.contains(git2::Status::INDEX_DELETED));
+
+        write.commit(&tmp.path, "remove a").expect("commit deletion");
+        let index = repo.index().expect("index");
+        assert!(
+            index.get_path(Path::new("a.txt"), 0).is_none(),
+            "после коммита удаления файла не должно быть в индексе"
+        );
+    }
+
+    #[test]
+    fn stage_missing_untracked_path_errors() {
+        let tmp = TempRepo::new();
+        tmp.repo();
+        let write = Git2Write;
+        let err = write
+            .stage(&tmp.path, &paths(&["ghost.txt"]))
+            .expect_err("stage must fail");
+        assert!(
+            err.to_string().contains("ghost.txt"),
+            "ошибка обязана называть путь: {err}"
+        );
     }
 }

@@ -1,6 +1,6 @@
 import * as api from './api.js';
 import { state, setStatus } from './state.js';
-import { esc, projectName, renderStatusSlot, renderProjectList } from './render.js';
+import { esc, projectName, renderStatusSlot, renderProjectList, showModal } from './render.js';
 
 const panelEl = document.getElementById('commit-panel');
 
@@ -21,23 +21,30 @@ function setBusy(value) {
 
 function fileRow(file, actionHtml) {
   const s = String(file.status).toUpperCase();
+  const deleted = s === 'D' ? ' is-deleted' : '';
   return `<div class="panel-file-row">
     <span class="file-status file-status-${esc(s)}">${esc(s)}</span>
-    <span class="file-path-item" title="${esc(file.path)}">${esc(file.path)}</span>
+    <span class="file-path-item${deleted}" title="${esc(file.path)}">${esc(file.path)}</span>
     <span class="panel-file-actions">${actionHtml(file.path)}</span>
   </div>`;
 }
 
-function section(title, files, renderAction) {
+function section(title, files, renderAction, headActionHtml) {
   const empty = files.length === 0 ? '<div class="panel-empty">нет изменений</div>' : '';
+  const headAction = headActionHtml ? `<span class="panel-section-actions">${headActionHtml}</span>` : '';
   return `<div class="panel-section">
-    <div class="panel-section-head">${esc(title)} <span class="panel-count">${files.length}</span></div>
+    <div class="panel-section-head">${esc(title)} <span class="panel-count">${files.length}</span>${headAction}</div>
     <div class="panel-files">${files.map((f) => fileRow(f, renderAction)).join('')}${empty}</div>
   </div>`;
 }
 
 function stageButton(path) {
   return `<button class="btn btn-tiny" data-action="stage" data-path="${esc(path)}" title="Добавить в индекс">+</button>`;
+}
+
+function stageAllButton(files) {
+  const disabled = files.length === 0 ? ' disabled' : '';
+  return `<button class="btn btn-tiny" data-action="stage-all" title="Добавить все изменения в индекс"${disabled}>+</button>`;
 }
 
 function unstageButton(path) {
@@ -59,13 +66,14 @@ export function renderPanelSections() {
     updateActionButtons(st);
     return;
   }
-  const staged = section('Промежуточные изменения', st.stagedFiles, unstageButton);
+  const staged = section('Стейдж индекс', st.stagedFiles, unstageButton);
   const unstaged = section(
     'Изменения',
     st.unstagedFiles,
     (p) => `${stageButton(p)}${discardButton(p)}`,
+    stageAllButton(st.unstagedFiles),
   );
-  slot.innerHTML = `${unstaged}${staged}`;
+  slot.innerHTML = `${staged}${unstaged}`;
   updateActionButtons(st);
 }
 
@@ -100,8 +108,9 @@ function renderPanelBody() {
     <div class="panel-commit">
       <textarea id="commit-message" rows="4" placeholder="Сообщение коммита…">${esc(state.panelMessage)}</textarea>
       <div class="panel-actions">
-        <span class="panel-hint">Хранится в .git/COMMIT_EDITMSG</span>
+        <span class="panel-hint">Черновик сохраняется автоматически</span>
         <button id="btn-panel-commit" class="btn btn-primary">Коммит</button>
+        <button id="btn-panel-generate" class="btn">Сгенерировать сообщение</button>
         <button id="btn-panel-push" class="btn">Запушить</button>
       </div>
       <div class="error-banner hidden" data-slot="panel-error"></div>
@@ -214,6 +223,15 @@ async function onStage(path) {
   await runAction('stage', () => api.stageFiles(state.panelPath, [path]));
 }
 
+async function onStageAll() {
+  const st = panel();
+  const paths = (st.unstagedFiles ?? []).map((f) => f.path);
+  if (paths.length === 0) {
+    return;
+  }
+  await runAction('stage-all', () => api.stageFiles(state.panelPath, paths));
+}
+
 async function onUnstage(path) {
   await runAction('unstage', () => api.unstageFiles(state.panelPath, [path]));
 }
@@ -225,6 +243,8 @@ async function onCommit() {
     setPanelError('Введите сообщение коммита');
     return;
   }
+  clearTimeout(state.panelSaveTimer);
+  state.panelSaveTimer = null;
   await runAction('commit', async () => {
     await api.commitChanges(state.panelPath, message);
     state.panelMessage = '';
@@ -236,6 +256,28 @@ async function onCommit() {
 
 async function onPush() {
   await runAction('push', () => api.pushChanges(state.panelPath));
+}
+
+async function onPanelGenerate() {
+  const path = state.panelPath;
+  if (!path) {
+    return;
+  }
+  const notes = window.prompt('Заметки разработчика (необязательно, игнорируются если нерелевантно):', '');
+  if (notes === null) {
+    return;
+  }
+  setBusy(true);
+  setPanelError('');
+  try {
+    const message = await api.generateCommitMessage(path, notes);
+    showModal('Commit-сообщение', message);
+  } catch (err) {
+    setPanelError(String(err));
+    api.logFront(`[generate] ${String(err)}`);
+  } finally {
+    setBusy(false);
+  }
 }
 
 export function bindCommitPanelHandlers() {
@@ -253,6 +295,9 @@ export function bindCommitPanelHandlers() {
         case 'stage':
           onStage(btn.dataset.path);
           return;
+        case 'stage-all':
+          onStageAll();
+          return;
         case 'unstage':
           onUnstage(btn.dataset.path);
           return;
@@ -265,6 +310,8 @@ export function bindCommitPanelHandlers() {
       onCommit();
     } else if (target.id === 'btn-panel-push' && state.panelPath) {
       onPush();
+    } else if (target.id === 'btn-panel-generate' && state.panelPath) {
+      onPanelGenerate();
     }
   });
   panelEl.addEventListener('input', (event) => {

@@ -1,11 +1,18 @@
 use std::path::{Path, PathBuf};
 
+pub trait CommitDraftStore: Send + Sync {
+    fn read_draft(&self, project_path: &Path) -> Result<String, anyhow::Error>;
+    fn write_draft(&self, project_path: &Path, message: &str) -> Result<(), anyhow::Error>;
+    fn clear_draft(&self, project_path: &Path) -> Result<(), anyhow::Error>;
+}
+
 use crate::domain::project::{Project, ProjectStatus};
 
 pub trait ConfigStore: Send + Sync {
     fn list_projects(&self) -> Vec<Project>;
     fn add_project(&self, path: PathBuf) -> Result<(), anyhow::Error>;
     fn remove_project(&self, path: &Path) -> Result<(), anyhow::Error>;
+    fn reorder_projects(&self, paths: &[PathBuf]) -> Result<(), anyhow::Error>;
 }
 
 pub trait GitApi: Send + Sync {
@@ -23,6 +30,4 @@ pub trait GitWriteApi: Send + Sync {
     fn discard(&self, project_path: &Path, paths: &[String]) -> Result<(), anyhow::Error>;
     fn commit(&self, project_path: &Path, message: &str) -> Result<(), anyhow::Error>;
     fn push(&self, project_path: &Path) -> Result<(), anyhow::Error>;
-    fn read_commit_message(&self, project_path: &Path) -> Result<String, anyhow::Error>;
-    fn write_commit_message(&self, project_path: &Path, message: &str) -> Result<(), anyhow::Error>;
 }

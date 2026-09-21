@@ -38,21 +38,10 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 12px 20px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
-}
-
-.brand h1 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.subtitle {
-  color: var(--text-dim);
-  font-size: 12px;
 }
 
 .topbar-actions { display: flex; gap: 8px; }
@@ -189,12 +178,17 @@ body {
 }
 
 .panel-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 12px;
   font-size: 13px;
   font-weight: 600;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
 }
+
+.panel-section-actions { margin-left: auto; display: flex; gap: 6px; }
 
 .panel-count {
   color: var(--text-dim);
@@ -302,6 +296,20 @@ body {
   font-size: 12px;
 }
 
+.project-move {
+  display: flex;
+  gap: 4px;
+  margin-right: 4px;
+  padding-right: 8px;
+  border-right: 1px solid var(--border);
+}
+
+.project-move .btn {
+  padding: 0 6px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
 .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 
 .badge {
@@ -376,6 +384,11 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.file-path-item.is-deleted {
+  color: var(--text-dim);
+  text-decoration: line-through;
 }
 
 #tab-logs logs-panel {

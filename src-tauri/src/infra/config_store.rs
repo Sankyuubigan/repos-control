@@ -59,6 +59,22 @@ impl ConfigStore for FileConfigStore {
         drop(guard);
         self.save(&snapshot)
     }
+
+    fn reorder_projects(&self, paths: &[PathBuf]) -> Result<(), anyhow::Error> {
+        let mut guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut reordered: Vec<Project> = Vec::with_capacity(guard.len());
+        for path in paths {
+            if let Some(pos) = guard.iter().position(|p| &p.path == path) {
+                reordered.push(guard.remove(pos));
+            }
+        }
+        reordered.extend(guard.drain(..));
+        *guard = reordered;
+        log::info!("reordered projects: {:?}", &*guard);
+        let snapshot = guard.clone();
+        drop(guard);
+        self.save(&snapshot)
+    }
 }
 
 fn default_config_path() -> Result<PathBuf, anyhow::Error> {
@@ -110,5 +126,51 @@ mod tests {
     fn apis_available() {
         let _ = FileConfigStore::new();
         let _ = env::var("APPDATA");
+    }
+
+    #[test]
+    fn reorder_projects_roundtrip() {
+        let dir = temp_dir();
+        let path = dir.join("app_config.json");
+        let store = FileConfigStore { path, inner: Mutex::new(Vec::new()) };
+
+        store.add_project(PathBuf::from("D:\\a\\repo1")).unwrap();
+        store.add_project(PathBuf::from("D:\\a\\repo2")).unwrap();
+        store.add_project(PathBuf::from("D:\\a\\repo3")).unwrap();
+
+        store
+            .reorder_projects(&[
+                PathBuf::from("D:\\a\\repo3"),
+                PathBuf::from("D:\\a\\repo1"),
+                PathBuf::from("D:\\a\\repo2"),
+            ])
+            .unwrap();
+
+        let persisted = load_projects(&store.path).unwrap();
+        let paths: Vec<_> = persisted.iter().map(|p| p.path.clone()).collect();
+        assert_eq!(
+            paths,
+            vec![
+                PathBuf::from("D:\\a\\repo3"),
+                PathBuf::from("D:\\a\\repo1"),
+                PathBuf::from("D:\\a\\repo2"),
+            ]
+        );
+
+        store
+            .reorder_projects(&[PathBuf::from("D:\\a\\repo1")])
+            .unwrap();
+        let persisted = load_projects(&store.path).unwrap();
+        let paths: Vec<_> = persisted.iter().map(|p| p.path.clone()).collect();
+        assert_eq!(
+            paths,
+            vec![
+                PathBuf::from("D:\\a\\repo1"),
+                PathBuf::from("D:\\a\\repo3"),
+                PathBuf::from("D:\\a\\repo2"),
+            ]
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

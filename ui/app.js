@@ -58,6 +58,25 @@ async function onAddProject() {
   }
 }
 
+async function onMoveProject(path, delta) {
+  const index = state.projects.findIndex((p) => p.path === path);
+  const next = index + delta;
+  if (index < 0 || next < 0 || next >= state.projects.length) {
+    return;
+  }
+  const previous = state.projects.slice();
+  const [moved] = state.projects.splice(index, 1);
+  state.projects.splice(next, 0, moved);
+  renderProjectList();
+  try {
+    await api.reorderProjects(state.projects.map((p) => p.path));
+  } catch (err) {
+    state.projects = previous;
+    renderProjectList();
+    showModal('Ошибка', String(err));
+  }
+}
+
 async function onRemoveProject(path) {
   if (!window.confirm(`Удалить проект «${path}» из списка?`)) {
     return;
@@ -71,28 +90,18 @@ async function onRemoveProject(path) {
   }
 }
 
-async function onGenerate(path) {
-  const notes = window.prompt('Заметки разработчика (необязательно, игнорируются если нерелевантно):', '');
-  if (notes === null) {
-    return;
-  }
-  try {
-    const message = await api.generateCommitMessage(path, notes);
-    showModal('Commit-сообщение', message);
-  } catch (err) {
-    showModal('Ошибка', String(err));
-  }
-}
-
-function onListClick(event) {
+async function onListClick(event) {
   const btn = event.target.closest('button[data-action]');
   if (!btn) {
     return;
   }
   const path = btn.dataset.path;
   switch (btn.dataset.action) {
-    case 'generate':
-      onGenerate(path);
+    case 'move-up':
+      onMoveProject(path, -1);
+      break;
+    case 'move-down':
+      onMoveProject(path, 1);
       break;
     case 'open-panel':
       openCommitPanel(path);
