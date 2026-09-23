@@ -14,6 +14,14 @@
   --mono: "Cascadia Code", Consolas, "Courier New", monospace;
 }
 
+@font-face {
+  font-family: 'seti';
+  src: url('./fonts/seti.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -215,6 +223,10 @@ body {
 
 .panel-empty { color: var(--text-dim); font-size: 12px; padding: 6px 12px; }
 
+.panel-loading { color: var(--text-dim); font-size: 13px; padding: 16px 12px; animation: pulse 1.2s ease-in-out infinite; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
 .panel-commit {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -378,6 +390,14 @@ body {
 .file-status-A { color: var(--green); }
 .file-status-M { color: var(--yellow); }
 .file-status-D { color: var(--red); }
+
+.file-icon {
+  font-family: 'seti', monospace;
+  font-size: 16px;
+  line-height: 1;
+  flex: 0 0 auto;
+  user-select: none;
+}
 
 .file-path-item {
   color: #c8d0e0;

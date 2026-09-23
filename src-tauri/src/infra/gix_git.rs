@@ -1,5 +1,8 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use gix::bstr::{BString, ByteSlice};
@@ -9,7 +12,50 @@ use gix::diff::blob::{diff_with_slider_heuristics, Algorithm, InternedInput, Uni
 use crate::domain::contracts::GitApi;
 use crate::domain::project::{ChangeKind, ChangedFile, FileChange, ProjectStatus};
 
-pub struct GixGit;
+pub struct GixGit {
+    cache: Mutex<HashMap<PathBuf, CachedStatus>>,
+}
+
+struct CachedStatus {
+    status: ProjectStatus,
+    at: Instant,
+}
+
+impl GixGit {
+    pub fn new() -> Self {
+        Self {
+            cache: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn cached(&self, project_path: &Path) -> Option<ProjectStatus> {
+        let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+        match cache.get(project_path) {
+            Some(entry) if entry.at.elapsed() < STATUS_CACHE_TTL => Some(entry.status.clone()),
+            _ => {
+                cache.remove(project_path);
+                None
+            }
+        }
+    }
+
+    fn remember(&self, project_path: &Path, status: &ProjectStatus) {
+        let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+        cache.insert(
+            project_path.to_path_buf(),
+            CachedStatus {
+                status: status.clone(),
+                at: Instant::now(),
+            },
+        );
+    }
+}
+
+impl Default for GixGit {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 struct Snapshot {
     branch: Option<String>,
@@ -23,71 +69,149 @@ struct Snapshot {
 const DIFF_LINE_LIMIT: usize = 500;
 const DIFF_CONTEXT: u32 = 3;
 const BINARY_SNOOP: usize = 8000;
+const STATUS_CACHE_TTL: Duration = Duration::from_secs(10);
+const STATUS_TIMEOUT: Duration = Duration::from_secs(25);
+const DIFF_TIMEOUT: Duration = Duration::from_secs(20);
+
+fn spawn_watchdog(done: Arc<AtomicBool>, interrupt: Arc<AtomicBool>, deadline: Instant, what: &'static str) {
+    if std::thread::Builder::new()
+        .name("status-watchdog".into())
+        .spawn(move || {
+            while !done.load(Ordering::Acquire) {
+                if Instant::now() >= deadline {
+                    log::warn!("{what}: превышен лимит времени, прерываю");
+                    interrupt.store(true, Ordering::Release);
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        })
+        .is_err()
+    {
+        log::warn!("watchdog spawn failed for {what}");
+    }
+}
+
+fn check_deadline(interrupt: &AtomicBool, deadline: Instant, stage: &str) -> Result<()> {
+    if interrupt.load(Ordering::Acquire) || Instant::now() >= deadline {
+        anyhow::bail!("{stage}: превышен лимит времени");
+    }
+    Ok(())
+}
 
 impl GitApi for GixGit {
     fn status(&self, project_path: &Path) -> Result<ProjectStatus> {
-        let repo = open_repo(project_path)?;
-        let snap = collect_snapshot(&repo)?;
-        let (ahead, behind, has_upstream) = match (snap.head_id, snap.upstream_id) {
-            (Some(head), Some(upstream)) => {
-                let (a, b) = count_ahead_behind(&repo, head, upstream)?;
-                (a, b, true)
-            }
-            _ => (0, 0, false),
-        };
-        let changed_files = collect_changed_files(&snap);
-        let staged_files = direct_changed_files(&snap.staged, 'A');
-        let mut unstaged_files = direct_changed_files(&snap.unstaged, 'M');
-        unstaged_files.extend(direct_changed_files(&snap.untracked, 'U'));
-        Ok(ProjectStatus {
-            is_repo: true,
-            branch: snap.branch,
-            has_upstream,
-            ahead,
-            behind,
-            staged: snap.staged.len(),
-            unstaged: snap.unstaged.len(),
-            untracked: snap.untracked.len(),
-            changed_files,
-            staged_files,
-            unstaged_files,
-            error: None,
-        })
+        if let Some(status) = self.cached(project_path) {
+            return Ok(status);
+        }
+        let started = Instant::now();
+        let done = Arc::new(AtomicBool::new(false));
+        let interrupt = Arc::new(AtomicBool::new(false));
+        let deadline = Instant::now() + STATUS_TIMEOUT;
+        spawn_watchdog(Arc::clone(&done), Arc::clone(&interrupt), deadline, "status");
+        let result = (|| {
+            let repo = open_repo(project_path)?;
+            let snap = collect_snapshot(&repo, &interrupt, deadline)?;
+            let (ahead, behind, has_upstream) = match (snap.head_id, snap.upstream_id) {
+                (Some(head), Some(upstream)) => {
+                    let (a, b) = count_ahead_behind(&repo, head, upstream, &interrupt, deadline)?;
+                    (a, b, true)
+                }
+                _ => (0, 0, false),
+            };
+            let changed_files = collect_changed_files(&snap);
+            let staged_files = direct_changed_files(&snap.staged, 'A');
+            let mut unstaged_files = direct_changed_files(&snap.unstaged, 'M');
+            unstaged_files.extend(direct_changed_files(&snap.untracked, 'U'));
+            Ok(ProjectStatus {
+                is_repo: true,
+                branch: snap.branch,
+                has_upstream,
+                ahead,
+                behind,
+                staged: snap.staged.len(),
+                unstaged: snap.unstaged.len(),
+                untracked: snap.untracked.len(),
+                changed_files,
+                staged_files,
+                unstaged_files,
+                error: None,
+            })
+        })();
+        done.store(true, Ordering::Release);
+        if let Ok(status) = &result {
+            log::info!(
+                "статус {}: {:.1}с",
+                project_path.display(),
+                started.elapsed().as_secs_f64()
+            );
+            self.remember(project_path, status);
+        } else if let Err(err) = &result {
+            log::error!("статус {} не удался: {err:#}", project_path.display());
+        }
+        result
     }
 
     fn collect_diff(&self, project_path: &Path, staged_first: bool) -> Result<String> {
-        let repo = open_repo(project_path)?;
-        let snap = collect_snapshot(&repo)?;
+        let started = Instant::now();
+        let done = Arc::new(AtomicBool::new(false));
+        let interrupt = Arc::new(AtomicBool::new(false));
+        let deadline = Instant::now() + DIFF_TIMEOUT;
+        spawn_watchdog(
+            Arc::clone(&done),
+            Arc::clone(&interrupt),
+            deadline,
+            "diff",
+        );
+        let result = (|| {
+            let repo = open_repo(project_path)?;
+            let snap = collect_snapshot(&repo, &interrupt, deadline)?;
 
-        let staged: Vec<&FileChange> = snap
-            .staged
-            .iter()
-            .filter(|c| c.kind != ChangeKind::Removed)
-            .collect();
-
-        let entries: Vec<&FileChange> = if staged_first && !staged.is_empty() {
-            staged
-        } else {
-            let mut fallback: Vec<&FileChange> = snap
-                .unstaged
+            let staged: Vec<&FileChange> = snap
+                .staged
                 .iter()
                 .filter(|c| c.kind != ChangeKind::Removed)
                 .collect();
-            fallback.extend(snap.untracked.iter());
-            fallback
-        };
 
-        let mut blocks: Vec<String> = Vec::new();
-        for entry in entries {
-            if let Some(block) = render_file_diff(&repo, entry)? {
-                blocks.push(block);
+            let entries: Vec<&FileChange> = if staged_first && !staged.is_empty() {
+                staged
+            } else {
+                let mut fallback: Vec<&FileChange> = snap
+                    .unstaged
+                    .iter()
+                    .filter(|c| c.kind != ChangeKind::Removed)
+                    .collect();
+                fallback.extend(snap.untracked.iter());
+                fallback
+            };
+
+            let mut blocks: Vec<String> = Vec::new();
+            for entry in entries {
+                check_deadline(&interrupt, deadline, "diff")?;
+                if let Some(block) = render_file_diff(&repo, entry)? {
+                    blocks.push(block);
+                }
             }
+            if blocks.is_empty() {
+                return Ok(String::new());
+            }
+            let joined = blocks.join("\n");
+            Ok(truncate_lines(&joined, DIFF_LINE_LIMIT))
+        })();
+        done.store(true, Ordering::Release);
+        if let Err(err) = &result {
+            log::error!(
+                "diff {} не удался: {err:#}",
+                project_path.display()
+            );
+        } else {
+            log::info!(
+                "diff {}: {:.1}с",
+                project_path.display(),
+                started.elapsed().as_secs_f64()
+            );
         }
-        if blocks.is_empty() {
-            return Ok(String::new());
-        }
-        let joined = blocks.join("\n");
-        Ok(truncate_lines(&joined, DIFF_LINE_LIMIT))
+        result
     }
 }
 
@@ -95,25 +219,39 @@ fn open_repo(path: &Path) -> Result<gix::Repository> {
     gix::discover(path).with_context(|| format!("Не git-репозиторий: {}", path.display()))
 }
 
-fn collect_snapshot(repo: &gix::Repository) -> Result<Snapshot> {
+fn collect_snapshot(
+    repo: &gix::Repository,
+    interrupt: &Arc<AtomicBool>,
+    deadline: Instant,
+) -> Result<Snapshot> {
+    let workdir = repo
+        .workdir()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    let t0 = Instant::now();
     let head = repo.head().with_context(|| "read HEAD")?;
     let (branch, head_id) = resolve_head(repo, &head)?;
+    let t_head = Instant::now();
 
     let upstream_id = match &branch {
         Some(name) => find_upstream(repo, name)?,
         None => None,
     };
 
+    let t_status = Instant::now();
     let mut staged: Vec<FileChange> = Vec::new();
     let mut unstaged: Vec<FileChange> = Vec::new();
     let mut untracked: Vec<FileChange> = Vec::new();
 
     let iter = repo
         .status(gix::progress::Discard)?
+        .should_interrupt_owned(interrupt.clone())
+        .untracked_files(gix::status::UntrackedFiles::Files)
         .into_iter(Vec::<BString>::new())
         .context("run git status")?;
 
     for item in iter {
+        check_deadline(interrupt, deadline, "status")?;
         let item = item.context("status iteration")?;
         match item {
             gix::status::Item::TreeIndex(change) => push_tree_index(&change, &mut staged),
@@ -122,10 +260,18 @@ fn collect_snapshot(repo: &gix::Repository) -> Result<Snapshot> {
             }
         }
     }
+    check_deadline(interrupt, deadline, "status")?;
 
     staged.sort_by(|a, b| a.path.cmp(&b.path));
     unstaged.sort_by(|a, b| a.path.cmp(&b.path));
     untracked.sort_by(|a, b| a.path.cmp(&b.path));
+
+    log::debug!(
+        "snapshot {workdir}: head {:.0}мс, upstream {:.0}мс, status-iter {:.0}мс",
+        t_head.duration_since(t0).as_millis(),
+        t_status.duration_since(t_head).as_millis(),
+        t_status.elapsed().as_millis()
+    );
 
     Ok(Snapshot {
         branch,
@@ -341,18 +487,26 @@ fn count_ahead_behind(
     repo: &gix::Repository,
     head: gix::hash::ObjectId,
     upstream: gix::hash::ObjectId,
+    interrupt: &AtomicBool,
+    deadline: Instant,
 ) -> Result<(u32, u32)> {
-    let upstream_set = reachable(repo, upstream)?;
-    let head_set = reachable(repo, head)?;
-    let ahead = walk_unique(repo, head, &upstream_set)?;
-    let behind = walk_unique(repo, upstream, &head_set)?;
+    let upstream_set = reachable(repo, upstream, interrupt, deadline)?;
+    let head_set = reachable(repo, head, interrupt, deadline)?;
+    let ahead = walk_unique(repo, head, &upstream_set, interrupt, deadline)?;
+    let behind = walk_unique(repo, upstream, &head_set, interrupt, deadline)?;
     Ok((ahead, behind))
 }
 
-fn reachable(repo: &gix::Repository, tip: gix::hash::ObjectId) -> Result<HashSet<gix::hash::ObjectId>> {
+fn reachable(
+    repo: &gix::Repository,
+    tip: gix::hash::ObjectId,
+    interrupt: &AtomicBool,
+    deadline: Instant,
+) -> Result<HashSet<gix::hash::ObjectId>> {
     let mut seen: HashSet<gix::hash::ObjectId> = HashSet::new();
     let mut stack = vec![tip];
     while let Some(id) = stack.pop() {
+        check_deadline(interrupt, deadline, "ahead_behind")?;
         if !seen.insert(id) {
             continue;
         }
@@ -366,11 +520,14 @@ fn walk_unique(
     repo: &gix::Repository,
     tip: gix::hash::ObjectId,
     shared: &HashSet<gix::hash::ObjectId>,
+    interrupt: &AtomicBool,
+    deadline: Instant,
 ) -> Result<u32> {
     let mut seen: HashSet<gix::hash::ObjectId> = HashSet::new();
     let mut count: u32 = 0;
     let mut stack = vec![tip];
     while let Some(id) = stack.pop() {
+        check_deadline(interrupt, deadline, "ahead_behind")?;
         if shared.contains(&id) {
             continue;
         }
@@ -513,6 +670,31 @@ mod tests {
     #[test]
     fn lossy_converts() {
         assert_eq!(lossy(b"hello"), "hello");
+    }
+
+    fn temp_repo(name: &str) -> git2::Repository {
+        let dir = std::env::temp_dir().join(format!(
+            "repos-control-test-{name}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        git2::Repository::init(&dir).unwrap()
+    }
+
+    #[test]
+    fn snapshot_lists_untracked_files_in_new_dir() {
+        let repo = temp_repo("untracked-dir");
+        let workdir = repo.workdir().unwrap().to_path_buf();
+        let new_dir = workdir.join("new_dir");
+        std::fs::create_dir_all(&new_dir).unwrap();
+        std::fs::write(new_dir.join("a.txt"), "a").unwrap();
+        std::fs::write(new_dir.join("b.txt"), "b").unwrap();
+
+        let gix_repo = open_repo(&workdir).unwrap();
+        let interrupt = Arc::new(AtomicBool::new(false));
+        let snap = collect_snapshot(&gix_repo, &interrupt, Instant::now() + STATUS_TIMEOUT).unwrap();
+        assert_eq!(snap.untracked.len(), 2, "файлы из новой папки не свернуты в директорию");
     }
 
     fn change(path: &str, kind: ChangeKind) -> FileChange {

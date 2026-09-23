@@ -3,9 +3,11 @@ mod domain;
 mod infra;
 
 use std::net::TcpListener;
-use std::sync::Mutex;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use api::Services;
+use infra::WatcherManager;
 use tauri::Manager;
 
 const READINESS_PORT: u16 = 14262;
@@ -29,6 +31,27 @@ pub fn run() {
                 }
                 Err(err) => {
                     log::warn!("readiness port {READINESS_PORT} already in use: {err}");
+                }
+            }
+            let services = app.state::<Services>();
+            let paths: Vec<PathBuf> = services
+                .config
+                .list_projects()
+                .into_iter()
+                .map(|p| p.path)
+                .collect();
+            match WatcherManager::new(
+                app.handle().clone(),
+                Arc::clone(&services.git),
+                Arc::clone(&services.busy),
+                Arc::clone(&services.status_slots),
+            ) {
+                Ok(watcher) => {
+                    watcher.set_project_paths(&paths);
+                    app.manage(watcher);
+                }
+                Err(err) => {
+                    log::warn!("fs-watcher disabled: {err}");
                 }
             }
             Ok(())

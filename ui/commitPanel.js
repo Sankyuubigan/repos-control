@@ -1,12 +1,21 @@
 import * as api from './api.js';
+import * as optimistic from './optimistic.js';
 import { state, setStatus } from './state.js';
 import { esc, projectName, renderStatusSlot, renderProjectList, showModal } from './render.js';
+import { fileIconHtml } from './fileIcons.js';
 
 const panelEl = document.getElementById('commit-panel');
 
 function panel() {
+  const v = state.statuses[state.panelPath];
+  if (!v) {
+    api.logFront(
+      `[panel-fallback] panelPath=${state.panelPath} hasStatus=${Object.prototype.hasOwnProperty.call(state.statuses, state.panelPath)} keys=${Object.keys(state.statuses).length} val=${JSON.stringify(v)}`,
+    );
+  }
   return (
-    state.statuses[state.panelPath] || {
+    v || {
+      loading: true,
       isRepo: false,
       changedFiles: [],
       stagedFiles: [],
@@ -24,6 +33,7 @@ function fileRow(file, actionHtml) {
   const deleted = s === 'D' ? ' is-deleted' : '';
   return `<div class="panel-file-row">
     <span class="file-status file-status-${esc(s)}">${esc(s)}</span>
+    ${fileIconHtml(file.path)}
     <span class="file-path-item${deleted}" title="${esc(file.path)}">${esc(file.path)}</span>
     <span class="panel-file-actions">${actionHtml(file.path)}</span>
   </div>`;
@@ -61,8 +71,17 @@ export function renderPanelSections() {
   if (!slot) {
     return;
   }
+  if (st.loading) {
+    api.logFront(
+      `[panel-fallback] panelPath=${state.panelPath} hasStatus=${Object.prototype.hasOwnProperty.call(state.statuses, state.panelPath)} keys=${Object.keys(state.statuses).length}`,
+    );
+    slot.innerHTML = `<div class="panel-loading">Загрузка статуса…</div>`;
+    updateActionButtons(st);
+    return;
+  }
   if (!st.isRepo) {
-    slot.innerHTML = `<div class="error-banner">Не git-репозиторий: ${esc(st.error || '?')}</div>`;
+    api.logFront(`[panel!repo] ${state.panelPath}: ${st.error || 'нет error'}`);
+    slot.innerHTML = `<div class="error-banner">${esc(st.error || 'Репозиторий недоступен')}</div>`;
     updateActionButtons(st);
     return;
   }
@@ -166,14 +185,19 @@ export async function refreshPanel() {
     return;
   }
   setBusy(true);
+  setPanelError('');
   try {
     const status = await api.getProjectStatus(path);
     setStatus(path, status);
     renderPanelSections();
     renderStatusSlot(path);
   } catch (err) {
-    setPanelError(String(err));
-    api.logFront(`[refreshPanel] ${String(err)}`);
+    const message = String(err);
+    setStatus(path, { isRepo: false, error: message });
+    renderPanelSections();
+    setPanelError(message);
+    renderStatusSlot(path);
+    api.logFront(`[refreshPanel] ${path}: ${message}`);
   } finally {
     setBusy(false);
   }
@@ -198,10 +222,20 @@ function saveMessageSoon() {
   }, 400);
 }
 
-async function runAction(label, action) {
+async function runAction(label, action, applyOptimistic) {
+  const path = state.panelPath;
+  if (!path) {
+    return;
+  }
   setBusy(true);
   setPanelError('');
   try {
+    if (applyOptimistic) {
+      const next = applyOptimistic(panel());
+      setStatus(path, next);
+      renderPanelSections();
+      renderStatusSlot(path);
+    }
     await action();
     await refreshPanel();
   } catch (err) {
@@ -216,11 +250,19 @@ async function onDiscard(path) {
   if (!window.confirm(`Откатить изменения в «${path}»?\nДействие необратимо.`)) {
     return;
   }
-  await runAction('discard', () => api.discardFiles(state.panelPath, [path]));
+  await runAction(
+    'discard',
+    () => api.discardFiles(state.panelPath, [path]),
+    (st) => optimistic.discard(st, [path]),
+  );
 }
 
 async function onStage(path) {
-  await runAction('stage', () => api.stageFiles(state.panelPath, [path]));
+  await runAction(
+    'stage',
+    () => api.stageFiles(state.panelPath, [path]),
+    (st) => optimistic.stage(st, [path]),
+  );
 }
 
 async function onStageAll() {
@@ -229,11 +271,19 @@ async function onStageAll() {
   if (paths.length === 0) {
     return;
   }
-  await runAction('stage-all', () => api.stageFiles(state.panelPath, paths));
+  await runAction(
+    'stage-all',
+    () => api.stageFiles(state.panelPath, paths),
+    (st2) => optimistic.stage(st2, paths),
+  );
 }
 
 async function onUnstage(path) {
-  await runAction('unstage', () => api.unstageFiles(state.panelPath, [path]));
+  await runAction(
+    'unstage',
+    () => api.unstageFiles(state.panelPath, [path]),
+    (st) => optimistic.unstage(st, [path]),
+  );
 }
 
 async function onCommit() {
@@ -245,17 +295,21 @@ async function onCommit() {
   }
   clearTimeout(state.panelSaveTimer);
   state.panelSaveTimer = null;
-  await runAction('commit', async () => {
-    await api.commitChanges(state.panelPath, message);
-    state.panelMessage = '';
-    if (textarea) {
-      textarea.value = '';
-    }
-  });
+  await runAction(
+    'commit',
+    async () => {
+      await api.commitChanges(state.panelPath, message);
+      state.panelMessage = '';
+      if (textarea) {
+        textarea.value = '';
+      }
+    },
+    (st) => optimistic.commit(st),
+  );
 }
 
 async function onPush() {
-  await runAction('push', () => api.pushChanges(state.panelPath));
+  await runAction('push', () => api.pushChanges(state.panelPath), (st) => optimistic.push(st));
 }
 
 async function onPanelGenerate() {

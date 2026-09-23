@@ -8,7 +8,25 @@ import {
   showModal,
   hideModal,
 } from './render.js';
-import { bindCommitPanelHandlers, openCommitPanel, refreshPanel } from './commitPanel.js';
+import { bindCommitPanelHandlers, openCommitPanel, refreshPanel, renderPanelSections } from './commitPanel.js';
+
+window.addEventListener('error', (event) => {
+  api.logFront(`[global-error] ${event.message} @ ${event.filename}:${event.lineno}`);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  const text = reason instanceof Error ? (reason.stack || reason.message) : String(reason);
+  api.logFront(`[unhandledrejection] ${text}`);
+});
+
+function onStatusChanged(path, status) {
+  setStatus(path, status);
+  renderStatusSlot(path);
+  if (state.panelPath === path) {
+    renderPanelSections();
+  }
+}
 
 async function refreshStatuses() {
   const paths = state.projects.map((p) => p.path);
@@ -16,10 +34,13 @@ async function refreshStatuses() {
     paths.map(async (path) => {
       try {
         const status = await api.getProjectStatus(path);
+        api.logFront(`[refreshStatuses] ${path}: ok`);
         setStatus(path, status);
         renderStatusSlot(path);
       } catch (err) {
-        setStatus(path, { isRepo: false, error: String(err) });
+        const message = String(err);
+        api.logFront(`[refreshStatuses] ${path}: ${message}`);
+        setStatus(path, { isRepo: false, error: message });
         renderStatusSlot(path);
       }
     }),
@@ -170,6 +191,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
   document.getElementById('modal-actions').addEventListener('click', onModalClick);
+
+  api.listenStatusChanged((payload) => {
+    const { path, ...status } = payload;
+    onStatusChanged(path, status);
+  });
 
   await refreshAll();
 });

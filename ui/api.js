@@ -1,5 +1,18 @@
 const invoke = window.__TAURI__.core.invoke;
 
+const STATUS_TIMEOUT = 20000;
+
+export function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      logFront(`${label}: таймаут (${ms / 1000}с)`);
+      reject(new Error(`${label} (${ms / 1000}с)`));
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 export function listProjects() {
   return invoke('list_projects');
 }
@@ -21,7 +34,11 @@ export function pickProjectFolder() {
 }
 
 export function getProjectStatus(projectPath) {
-  return invoke('get_project_status', { projectPath });
+  return withTimeout(
+    invoke('get_project_status', { projectPath }),
+    STATUS_TIMEOUT,
+    'Таймаут получения статуса',
+  );
 }
 
 export function generateCommitMessage(projectPath, notes) {
@@ -58,4 +75,10 @@ export function writeCommitMessage(projectPath, message) {
 
 export function logFront(msg) {
   window.__TAURI__?.logs?.logFront?.(msg);
+}
+
+export function listenStatusChanged(callback) {
+  return window.__TAURI__.event.listen('status-changed', (event) => {
+    callback(event.payload);
+  });
 }

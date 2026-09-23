@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { fileIconHtml } from './fileIcons.js';
 
 const listEl = document.getElementById('project-list');
 const emptyEl = document.getElementById('empty-state');
@@ -20,7 +21,7 @@ function renderStatus(path) {
     return badge('…', 'branch', 'загрузка');
   }
   if (!st.isRepo) {
-    return `<div class="error-banner">Не git-репозиторий: ${esc(st.error || '?')}</div>`;
+    return `<div class="error-banner">${esc(st.error || 'Репозиторий недоступен')}</div>`;
   }
   const badges = [];
   badges.push(badge(st.branch || '(нет ветки)', 'branch', `ветка: ${st.branch}`));
@@ -82,7 +83,7 @@ function renderFiles(path) {
     .map((f) => {
       const s = String(f.status).toUpperCase();
       const deleted = s === 'D' ? ' is-deleted' : '';
-      return `<div class="file-row"><span class="file-status file-status-${esc(s)}">${esc(s)}</span><span class="file-path-item${deleted}">${esc(f.path)}</span></div>`;
+      return `<div class="file-row"><span class="file-status file-status-${esc(s)}">${esc(s)}</span>${fileIconHtml(f.path)}<span class="file-path-item${deleted}">${esc(f.path)}</span></div>`;
     })
     .join('');
   return `<div class="files-block">
