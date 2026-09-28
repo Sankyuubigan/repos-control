@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 pub const SYSTEM_PROMPT: &str = "Ты — полезный ассистент, который генерирует информативные git commit-сообщения на основе вывода git diff. Пропусти преамбулу и убери все обратные кавычки вокруг commit-сообщения.";
 
 pub const INSTRUCTION_PROMPT: &str = "На основе предоставленного git diff сгенерируй краткое и ёмкое commit-сообщение. Руководствуйся следующими правилами:
@@ -9,12 +11,27 @@ pub const INSTRUCTION_PROMPT: &str = "На основе предоставлен
 pub const MAX_DIFF_CHARS: usize = 5000;
 pub const TRUNCATION_MARKER: &str = "[Diff truncated due to size]";
 
-pub fn build_prompt(notes: &str, diff: &str) -> String {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessage {
+    pub role: String,
+    pub content: String,
+}
+
+pub fn build_messages(notes: &str, diff: &str, lang: &str) -> Vec<ChatMessage> {
     let truncated = truncate_diff(diff);
     let user = format!(
-        "Заметки разработчика (игнорируй, если нерелевантно): {notes}\n\nИзменения:\n{truncated}"
+        "Заметки разработчика (игнорируй, если нерелевантно): {notes}\n\nИзменения:\n{truncated}\n\nОтветь на языке: {lang}."
     );
-    format!("{SYSTEM_PROMPT}\n\n{INSTRUCTION_PROMPT}\n\n{user}")
+    vec![
+        ChatMessage {
+            role: "system".to_string(),
+            content: format!("{SYSTEM_PROMPT}\n\n{INSTRUCTION_PROMPT}"),
+        },
+        ChatMessage {
+            role: "user".to_string(),
+            content: user,
+        },
+    ]
 }
 
 fn truncate_diff(diff: &str) -> String {

@@ -1,9 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::domain::commit_prompt;
-use crate::domain::contracts::{
-    CommitDraftStore, CommitMessageProvider, ConfigStore, GitApi, GitWriteApi,
-};
+use crate::domain::contracts::{CommitDraftStore, ConfigStore, GitApi, GitWriteApi};
 use crate::domain::project::{Project, ProjectStatus};
 
 pub fn list_projects<C: ConfigStore + ?Sized>(store: &C) -> Vec<Project> {
@@ -24,12 +22,12 @@ pub fn get_project_status<G: GitApi + ?Sized>(git: &G, project_path: &Path) -> P
     }
 }
 
-pub fn generate_commit_message<G: GitApi + ?Sized, P: CommitMessageProvider + ?Sized>(
+pub fn get_commit_diff<G: GitApi + ?Sized>(
     git: &G,
-    provider: &P,
     project_path: &Path,
     notes: &str,
-) -> Result<String, String> {
+    lang: &str,
+) -> Result<Vec<commit_prompt::ChatMessage>, String> {
     let diff = git.collect_diff(project_path, true).map_err(|err| {
         log::error!("collect_diff failed: {err:#}");
         format!("Не удалось собрать diff: {err}")
@@ -37,11 +35,7 @@ pub fn generate_commit_message<G: GitApi + ?Sized, P: CommitMessageProvider + ?S
     if diff.trim().is_empty() {
         return Err("Нет изменений для коммита".to_string());
     }
-    let prompt = commit_prompt::build_prompt(notes, &diff);
-    provider.generate(&prompt).map_err(|err| {
-        log::error!("commit message generation failed: {err:#}");
-        format!("Ошибка генерации: {err}")
-    })
+    Ok(commit_prompt::build_messages(notes, &diff, lang))
 }
 
 pub fn add_project<C: ConfigStore + ?Sized>(store: &C, path: &Path) -> Result<(), String> {

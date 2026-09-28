@@ -5,14 +5,10 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Manager, State};
 
-use crate::domain::contracts::{
-    CommitDraftStore, CommitMessageProvider, ConfigStore, GitApi, GitWriteApi,
-};
+use crate::domain::contracts::{CommitDraftStore, ConfigStore, GitApi, GitWriteApi};
 use crate::domain::project::{Project, ProjectStatus};
 use crate::domain::usecases;
-use crate::infra::{
-    FileCommitDraftStore, FileConfigStore, Git2Write, GixGit, StubCommitProvider, WatcherManager,
-};
+use crate::infra::{FileCommitDraftStore, FileConfigStore, Git2Write, GixGit, WatcherManager};
 
 const STATUS_COMMAND_TIMEOUT: Duration = Duration::from_secs(40);
 const STATUS_SLOTS: usize = 4;
@@ -21,7 +17,6 @@ pub struct Services {
     pub config: Arc<dyn ConfigStore>,
     pub git: Arc<dyn GitApi>,
     pub write_git: Arc<dyn GitWriteApi>,
-    pub provider: Arc<dyn CommitMessageProvider>,
     pub draft_store: Arc<dyn CommitDraftStore>,
     pub busy: Arc<AtomicBool>,
     pub status_slots: Arc<tokio::sync::Semaphore>,
@@ -36,7 +31,6 @@ impl Services {
             config: Arc::new(config),
             git: Arc::new(GixGit::new()),
             write_git: Arc::new(Git2Write),
-            provider: Arc::new(StubCommitProvider),
             draft_store: Arc::new(draft_store),
             busy: Arc::new(AtomicBool::new(false)),
             status_slots: Arc::new(tokio::sync::Semaphore::new(STATUS_SLOTS)),
@@ -114,26 +108,6 @@ pub async fn get_project_status(
             Err("Таймаут получения статуса".to_string())
         }
     }
-}
-
-#[tauri::command]
-pub async fn generate_commit_message(
-    services: State<'_, Services>,
-    project_path: String,
-    notes: String,
-) -> Result<String, String> {
-    let git = Arc::clone(&services.inner().git);
-    let provider = Arc::clone(&services.inner().provider);
-    tauri::async_runtime::spawn_blocking(move || {
-        usecases::generate_commit_message(
-            git.as_ref(),
-            provider.as_ref(),
-            Path::new(&project_path),
-            &notes,
-        )
-    })
-    .await
-    .map_err(|err| format!("Ошибка фоновой задачи: {err}"))?
 }
 
 #[tauri::command]

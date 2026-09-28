@@ -17,11 +17,15 @@ struct ReadinessPort(Mutex<Option<TcpListener>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    tauri_plugin_llama_engine::engine::config::set_app_data_dir_name("com.reposcontrol.app");
+    tauri_plugin_cloud_routers::set_app_data_dir_name("com.reposcontrol.app");
     let services = Services::new().expect("init application services");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_logs::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_llama_engine::init())
+        .plugin(tauri_plugin_cloud_routers::init())
         .manage(services)
         .setup(|app| {
             match TcpListener::bind(("127.0.0.1", READINESS_PORT)) {
@@ -62,7 +66,11 @@ pub fn run() {
             api::commands::remove_project,
             api::commands::reorder_projects,
             api::commands::get_project_status,
-            api::commands::generate_commit_message,
+            api::settings_commands::get_commit_diff,
+            api::settings_commands::get_commit_model,
+            api::settings_commands::set_commit_model,
+            api::settings_commands::get_commit_lang,
+            api::settings_commands::set_commit_lang,
             api::commands::pick_project_folder,
             api::commands::stage_files,
             api::commands::unstage_files,

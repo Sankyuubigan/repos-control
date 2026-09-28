@@ -32,9 +32,9 @@ function fileRow(file, actionHtml) {
   const s = String(file.status).toUpperCase();
   const deleted = s === 'D' ? ' is-deleted' : '';
   return `<div class="panel-file-row">
-    <span class="file-status file-status-${esc(s)}">${esc(s)}</span>
     ${fileIconHtml(file.path)}
     <span class="file-path-item${deleted}" title="${esc(file.path)}">${esc(file.path)}</span>
+    <span class="file-status file-status-${esc(s)}">${esc(s)}</span>
     <span class="panel-file-actions">${actionHtml(file.path)}</span>
   </div>`;
 }
@@ -321,10 +321,15 @@ async function onPanelGenerate() {
   if (notes === null) {
     return;
   }
+  if (!state.commitModel) {
+    setPanelError('Модель не выбрана. Откройте «Настройки» и выберите модель для commit-сообщений.');
+    return;
+  }
   setBusy(true);
   setPanelError('');
   try {
-    const message = await api.generateCommitMessage(path, notes);
+    const messages = await api.getCommitDiff(path, notes, state.commitLang || 'ru');
+    const message = await generateViaPlugin(state.commitModel, messages);
     showModal('Commit-сообщение', message);
   } catch (err) {
     setPanelError(String(err));
@@ -332,6 +337,41 @@ async function onPanelGenerate() {
   } finally {
     setBusy(false);
   }
+}
+
+async function generateViaPlugin(modelId, messages) {
+  if (modelId.startsWith('llama:')) {
+    const llama = window.__TAURI__?.['llama-engine'];
+    if (!llama) {
+      throw new Error('Плагин llama-engine недоступен');
+    }
+    return llama.generateText({
+      modelPath: modelId.slice('llama:'.length),
+      messages,
+      maxTokens: 256,
+      temperature: 0.3,
+    });
+  }
+  if (modelId.startsWith('cloud:')) {
+    const cloud = window.__TAURI__?.['cloud-routers'];
+    if (!cloud) {
+      throw new Error('Плагин cloud-routers недоступен');
+    }
+    const rest = modelId.slice('cloud:'.length);
+    const sep = rest.indexOf(':');
+    if (sep < 0) {
+      throw new Error(`Некорректный идентификатор модели: ${modelId}`);
+    }
+    const router = rest.slice(0, sep);
+    const combo = rest.slice(sep + 1);
+    return cloud.chatCompletion(router, {
+      model: combo,
+      messages,
+      maxTokens: 256,
+      temperature: 0.3,
+    });
+  }
+  throw new Error(`Неизвестный провайдер модели: ${modelId}`);
 }
 
 export function bindCommitPanelHandlers() {

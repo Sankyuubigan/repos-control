@@ -177,6 +177,132 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Default permissions for the cloud-routers plugin.\n#### This default permission set includes:\n\n- `allow-get-status`\n- `allow-install-or-update`\n- `allow-ensure-started`\n- `allow-stop`\n- `allow-set-router-dir`\n- `allow-get-combos`\n- `allow-set-api-key`\n- `allow-open-dashboard`\n- `allow-chat-completion`\n- `allow-check-router-update`",
+          "type": "string",
+          "const": "cloud-routers:default",
+          "markdownDescription": "Default permissions for the cloud-routers plugin.\n#### This default permission set includes:\n\n- `allow-get-status`\n- `allow-install-or-update`\n- `allow-ensure-started`\n- `allow-stop`\n- `allow-set-router-dir`\n- `allow-get-combos`\n- `allow-set-api-key`\n- `allow-open-dashboard`\n- `allow-chat-completion`\n- `allow-check-router-update`"
+        },
+        {
+          "description": "Allow running an OpenAI-compatible chat completion through cloud routers.",
+          "type": "string",
+          "const": "cloud-routers:allow-chat-completion",
+          "markdownDescription": "Allow running an OpenAI-compatible chat completion through cloud routers."
+        },
+        {
+          "description": "Allow checking for cloud router updates from npm registry.",
+          "type": "string",
+          "const": "cloud-routers:allow-check-router-update",
+          "markdownDescription": "Allow checking for cloud router updates from npm registry."
+        },
+        {
+          "description": "Allow lazily starting the cloud router server on demand.",
+          "type": "string",
+          "const": "cloud-routers:allow-ensure-started",
+          "markdownDescription": "Allow lazily starting the cloud router server on demand."
+        },
+        {
+          "description": "Allow listing cloud router LLM combos for the chat model picker.",
+          "type": "string",
+          "const": "cloud-routers:allow-get-combos",
+          "markdownDescription": "Allow listing cloud router LLM combos for the chat model picker."
+        },
+        {
+          "description": "Allow reading the cloud router gateway status (installed/running/version/port).",
+          "type": "string",
+          "const": "cloud-routers:allow-get-status",
+          "markdownDescription": "Allow reading the cloud router gateway status (installed/running/version/port)."
+        },
+        {
+          "description": "Allow installing/updating cloud routers (portable node.exe + npm bundle).",
+          "type": "string",
+          "const": "cloud-routers:allow-install-or-update",
+          "markdownDescription": "Allow installing/updating cloud routers (portable node.exe + npm bundle)."
+        },
+        {
+          "description": "Allow opening the cloud router web dashboard in the default browser.",
+          "type": "string",
+          "const": "cloud-routers:allow-open-dashboard",
+          "markdownDescription": "Allow opening the cloud router web dashboard in the default browser."
+        },
+        {
+          "description": "Allow setting the cloud router API key.",
+          "type": "string",
+          "const": "cloud-routers:allow-set-api-key",
+          "markdownDescription": "Allow setting the cloud router API key."
+        },
+        {
+          "description": "Allow overriding the cloud router install directory and re-checking whether the router is present there.",
+          "type": "string",
+          "const": "cloud-routers:allow-set-router-dir",
+          "markdownDescription": "Allow overriding the cloud router install directory and re-checking whether the router is present there."
+        },
+        {
+          "description": "Allow stopping the cloud router server.",
+          "type": "string",
+          "const": "cloud-routers:allow-stop",
+          "markdownDescription": "Allow stopping the cloud router server."
+        },
+        {
+          "description": "Denies the chat_completion command without any pre-configured scope.",
+          "type": "string",
+          "const": "cloud-routers:deny-chat-completion",
+          "markdownDescription": "Denies the chat_completion command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the check_router_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "cloud-routers:deny-check-router-update",
+          "markdownDescription": "Denies the check_router_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ensure_started command without any pre-configured scope.",
+          "type": "string",
+          "const": "cloud-routers:deny-ensure-started",
+          "markdownDescription": "Denies the ensure_started command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_combos command without any pre-configured scope.",
+          "type": "string",
+          "const": "cloud-routers:deny-get-combos",
+          "markdownDescription": "Denies the get_combos command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "cloud-routers:deny-get-status",
+          "markdownDescription": "Denies the get_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the install_or_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "cloud-routers:deny-install-or-update",
+          "markdownDescription": "Denies the install_or_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_dashboard command without any pre-configured scope.",
+          "type": "string",
+          "const": "cloud-routers:deny-open-dashboard",
+          "markdownDescription": "Denies the open_dashboard command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_api_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "cloud-routers:deny-set-api-key",
+          "markdownDescription": "Denies the set_api_key command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_router_dir command without any pre-configured scope.",
+          "type": "string",
+          "const": "cloud-routers:deny-set-router-dir",
+          "markdownDescription": "Denies the set_router_dir command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stop command without any pre-configured scope.",
+          "type": "string",
+          "const": "cloud-routers:deny-stop",
+          "markdownDescription": "Denies the stop command without any pre-configured scope."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",
@@ -2257,6 +2383,324 @@
           "type": "string",
           "const": "dialog:deny-save",
           "markdownDescription": "Denies the save command without any pre-configured scope."
+        },
+        {
+          "description": "Default permissions for the llama-engine plugin.\n#### This default permission set includes:\n\n- `allow-get-engine-status`\n- `allow-install-llamacpp`\n- `allow-set-engine-variant`\n- `allow-list-engine-sources`\n- `allow-set-engine-source`\n- `allow-check-engine-update`\n- `allow-install-engine-update`\n- `allow-remove-engine`\n- `allow-set-engine-dir`\n- `allow-get-models-catalog`\n- `allow-get-engine-config`\n- `allow-get-auto-download-info`\n- `allow-auto-download-default-model`\n- `allow-add-model`\n- `allow-remove-model`\n- `allow-delete-model-file`\n- `allow-get-mmproj-path`\n- `allow-ensure-mmproj`\n- `allow-get-model-capabilities`\n- `allow-get-all-capabilities`\n- `allow-estimate-prompt-memory`\n- `allow-get-model-params`\n- `allow-set-model-params`\n- `allow-reset-model-params`\n- `allow-download-model`\n- `allow-generate-text`",
+          "type": "string",
+          "const": "llama-engine:default",
+          "markdownDescription": "Default permissions for the llama-engine plugin.\n#### This default permission set includes:\n\n- `allow-get-engine-status`\n- `allow-install-llamacpp`\n- `allow-set-engine-variant`\n- `allow-list-engine-sources`\n- `allow-set-engine-source`\n- `allow-check-engine-update`\n- `allow-install-engine-update`\n- `allow-remove-engine`\n- `allow-set-engine-dir`\n- `allow-get-models-catalog`\n- `allow-get-engine-config`\n- `allow-get-auto-download-info`\n- `allow-auto-download-default-model`\n- `allow-add-model`\n- `allow-remove-model`\n- `allow-delete-model-file`\n- `allow-get-mmproj-path`\n- `allow-ensure-mmproj`\n- `allow-get-model-capabilities`\n- `allow-get-all-capabilities`\n- `allow-estimate-prompt-memory`\n- `allow-get-model-params`\n- `allow-set-model-params`\n- `allow-reset-model-params`\n- `allow-download-model`\n- `allow-generate-text`"
+        },
+        {
+          "description": "Allow adding a model file to the model list.",
+          "type": "string",
+          "const": "llama-engine:allow-add-model",
+          "markdownDescription": "Allow adding a model file to the model list."
+        },
+        {
+          "description": "Allow auto-downloading the default model into a chosen folder.",
+          "type": "string",
+          "const": "llama-engine:allow-auto-download-default-model",
+          "markdownDescription": "Allow auto-downloading the default model into a chosen folder."
+        },
+        {
+          "description": "Allow checking for a newer llama.cpp engine release.",
+          "type": "string",
+          "const": "llama-engine:allow-check-engine-update",
+          "markdownDescription": "Allow checking for a newer llama.cpp engine release."
+        },
+        {
+          "description": "Allow deleting a model file from disk.",
+          "type": "string",
+          "const": "llama-engine:allow-delete-model-file",
+          "markdownDescription": "Allow deleting a model file from disk."
+        },
+        {
+          "description": "Allow downloading a file (used internally for models/mmproj).",
+          "type": "string",
+          "const": "llama-engine:allow-download-model",
+          "markdownDescription": "Allow downloading a file (used internally for models/mmproj)."
+        },
+        {
+          "description": "Allow downloading the mmproj for a model when missing.",
+          "type": "string",
+          "const": "llama-engine:allow-ensure-mmproj",
+          "markdownDescription": "Allow downloading the mmproj for a model when missing."
+        },
+        {
+          "description": "Allow estimating VRAM usage for a prompt (model + KV cache + NVML facts).",
+          "type": "string",
+          "const": "llama-engine:allow-estimate-prompt-memory",
+          "markdownDescription": "Allow estimating VRAM usage for a prompt (model + KV cache + NVML facts)."
+        },
+        {
+          "description": "Allow one-shot text generation via the llama.cpp engine (commit messages, summaries).",
+          "type": "string",
+          "const": "llama-engine:allow-generate-text",
+          "markdownDescription": "Allow one-shot text generation via the llama.cpp engine (commit messages, summaries)."
+        },
+        {
+          "description": "Allow reading capabilities for all installed models.",
+          "type": "string",
+          "const": "llama-engine:allow-get-all-capabilities",
+          "markdownDescription": "Allow reading capabilities for all installed models."
+        },
+        {
+          "description": "Allow reading auto-download proposal for the default model.",
+          "type": "string",
+          "const": "llama-engine:allow-get-auto-download-info",
+          "markdownDescription": "Allow reading auto-download proposal for the default model."
+        },
+        {
+          "description": "Allow reading the current engine config (model list, last_model, mmproj, meta).",
+          "type": "string",
+          "const": "llama-engine:allow-get-engine-config",
+          "markdownDescription": "Allow reading the current engine config (model list, last_model, mmproj, meta)."
+        },
+        {
+          "description": "Allow reading the llama.cpp engine status (installed variants, gpu, cuda).",
+          "type": "string",
+          "const": "llama-engine:allow-get-engine-status",
+          "markdownDescription": "Allow reading the llama.cpp engine status (installed variants, gpu, cuda)."
+        },
+        {
+          "description": "Allow reading the mmproj path for a model.",
+          "type": "string",
+          "const": "llama-engine:allow-get-mmproj-path",
+          "markdownDescription": "Allow reading the mmproj path for a model."
+        },
+        {
+          "description": "Allow reading capabilities (vision/audio/uncen) for one model.",
+          "type": "string",
+          "const": "llama-engine:allow-get-model-capabilities",
+          "markdownDescription": "Allow reading capabilities (vision/audio/uncen) for one model."
+        },
+        {
+          "description": "Allow reading sampling parameters for a model.",
+          "type": "string",
+          "const": "llama-engine:allow-get-model-params",
+          "markdownDescription": "Allow reading sampling parameters for a model."
+        },
+        {
+          "description": "Allow reading the embedded/override models catalog.",
+          "type": "string",
+          "const": "llama-engine:allow-get-models-catalog",
+          "markdownDescription": "Allow reading the embedded/override models catalog."
+        },
+        {
+          "description": "Allow re-installing (updating) the llama.cpp engine.",
+          "type": "string",
+          "const": "llama-engine:allow-install-engine-update",
+          "markdownDescription": "Allow re-installing (updating) the llama.cpp engine."
+        },
+        {
+          "description": "Allow installing/downloading a llama.cpp backend variant.",
+          "type": "string",
+          "const": "llama-engine:allow-install-llamacpp",
+          "markdownDescription": "Allow installing/downloading a llama.cpp backend variant."
+        },
+        {
+          "description": "Allow listing available engine binary sources (ggml-org, beellama, …).",
+          "type": "string",
+          "const": "llama-engine:allow-list-engine-sources",
+          "markdownDescription": "Allow listing available engine binary sources (ggml-org, beellama, …)."
+        },
+        {
+          "description": "Allow removing the llama.cpp engine backend.",
+          "type": "string",
+          "const": "llama-engine:allow-remove-engine",
+          "markdownDescription": "Allow removing the llama.cpp engine backend."
+        },
+        {
+          "description": "Allow removing a model from the list (file stays).",
+          "type": "string",
+          "const": "llama-engine:allow-remove-model",
+          "markdownDescription": "Allow removing a model from the list (file stays)."
+        },
+        {
+          "description": "Allow resetting sampling parameters (re-derived from gguf).",
+          "type": "string",
+          "const": "llama-engine:allow-reset-model-params",
+          "markdownDescription": "Allow resetting sampling parameters (re-derived from gguf)."
+        },
+        {
+          "description": "Allow overriding the engine directory.",
+          "type": "string",
+          "const": "llama-engine:allow-set-engine-dir",
+          "markdownDescription": "Allow overriding the engine directory."
+        },
+        {
+          "description": "Allow switching the engine binary source (ggml-org/beellama).",
+          "type": "string",
+          "const": "llama-engine:allow-set-engine-source",
+          "markdownDescription": "Allow switching the engine binary source (ggml-org/beellama)."
+        },
+        {
+          "description": "Allow switching the engine backend variant (cuda/vulkan/cpu/hip-radeon/auto).",
+          "type": "string",
+          "const": "llama-engine:allow-set-engine-variant",
+          "markdownDescription": "Allow switching the engine backend variant (cuda/vulkan/cpu/hip-radeon/auto)."
+        },
+        {
+          "description": "Allow saving sampling parameters for a model.",
+          "type": "string",
+          "const": "llama-engine:allow-set-model-params",
+          "markdownDescription": "Allow saving sampling parameters for a model."
+        },
+        {
+          "description": "Denies the add_model command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-add-model",
+          "markdownDescription": "Denies the add_model command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the auto_download_default_model command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-auto-download-default-model",
+          "markdownDescription": "Denies the auto_download_default_model command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the check_engine_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-check-engine-update",
+          "markdownDescription": "Denies the check_engine_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the delete_model_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-delete-model-file",
+          "markdownDescription": "Denies the delete_model_file command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the download_model command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-download-model",
+          "markdownDescription": "Denies the download_model command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ensure_mmproj command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-ensure-mmproj",
+          "markdownDescription": "Denies the ensure_mmproj command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the estimate_prompt_memory command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-estimate-prompt-memory",
+          "markdownDescription": "Denies the estimate_prompt_memory command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the generate_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-generate-text",
+          "markdownDescription": "Denies the generate_text command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_all_capabilities command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-get-all-capabilities",
+          "markdownDescription": "Denies the get_all_capabilities command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_auto_download_info command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-get-auto-download-info",
+          "markdownDescription": "Denies the get_auto_download_info command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_engine_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-get-engine-config",
+          "markdownDescription": "Denies the get_engine_config command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_engine_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-get-engine-status",
+          "markdownDescription": "Denies the get_engine_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_mmproj_path command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-get-mmproj-path",
+          "markdownDescription": "Denies the get_mmproj_path command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_model_capabilities command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-get-model-capabilities",
+          "markdownDescription": "Denies the get_model_capabilities command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_model_params command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-get-model-params",
+          "markdownDescription": "Denies the get_model_params command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_models_catalog command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-get-models-catalog",
+          "markdownDescription": "Denies the get_models_catalog command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the install_engine_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-install-engine-update",
+          "markdownDescription": "Denies the install_engine_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the install_llamacpp command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-install-llamacpp",
+          "markdownDescription": "Denies the install_llamacpp command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the list_engine_sources command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-list-engine-sources",
+          "markdownDescription": "Denies the list_engine_sources command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the remove_engine command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-remove-engine",
+          "markdownDescription": "Denies the remove_engine command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the remove_model command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-remove-model",
+          "markdownDescription": "Denies the remove_model command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the reset_model_params command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-reset-model-params",
+          "markdownDescription": "Denies the reset_model_params command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_engine_dir command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-set-engine-dir",
+          "markdownDescription": "Denies the set_engine_dir command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_engine_source command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-set-engine-source",
+          "markdownDescription": "Denies the set_engine_source command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_engine_variant command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-set-engine-variant",
+          "markdownDescription": "Denies the set_engine_variant command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_model_params command without any pre-configured scope.",
+          "type": "string",
+          "const": "llama-engine:deny-set-model-params",
+          "markdownDescription": "Denies the set_model_params command without any pre-configured scope."
         },
         {
           "description": "Default permissions for the logs plugin.\n#### This default permission set includes:\n\n- `allow-get-last-logs-path`\n- `allow-get-log-file-path`\n- `allow-log-frontend-event`\n- `allow-track-event`\n- `allow-track-error`\n- `allow-set-reporting-enabled`\n- `allow-save-logs-file`",

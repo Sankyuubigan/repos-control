@@ -45,6 +45,26 @@ export function generateCommitMessage(projectPath, notes) {
   return invoke('generate_commit_message', { projectPath, notes });
 }
 
+export function getCommitDiff(projectPath, notes, lang) {
+  return invoke('get_commit_diff', { projectPath, notes, lang });
+}
+
+export function getCommitModel() {
+  return invoke('get_commit_model');
+}
+
+export function setCommitModel(model) {
+  return invoke('set_commit_model', { model });
+}
+
+export function getCommitLang() {
+  return invoke('get_commit_lang');
+}
+
+export function setCommitLang(lang) {
+  return invoke('set_commit_lang', { lang });
+}
+
 export function stageFiles(projectPath, paths) {
   return invoke('stage_files', { projectPath, paths });
 }

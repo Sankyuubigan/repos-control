@@ -7,6 +7,8 @@ export const state = {
   panelPath: null,
   panelMessage: '',
   panelSaveTimer: null,
+  commitModel: '',
+  commitLang: 'ru',
 };
 
 export function setProjects(projects) {

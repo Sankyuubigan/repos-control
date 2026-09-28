@@ -83,7 +83,7 @@ function renderFiles(path) {
     .map((f) => {
       const s = String(f.status).toUpperCase();
       const deleted = s === 'D' ? ' is-deleted' : '';
-      return `<div class="file-row"><span class="file-status file-status-${esc(s)}">${esc(s)}</span>${fileIconHtml(f.path)}<span class="file-path-item${deleted}">${esc(f.path)}</span></div>`;
+      return `<div class="file-row">${fileIconHtml(f.path)}<span class="file-path-item${deleted}">${esc(f.path)}</span><span class="file-status file-status-${esc(s)}">${esc(s)}</span></div>`;
     })
     .join('');
   return `<div class="files-block">

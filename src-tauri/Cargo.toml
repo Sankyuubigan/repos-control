@@ -1,6 +1,6 @@
 [package]
 name = "repos-control"
-version = "26.9.14"
+version = "26.9.19"
 description = "Repos Control - desktop panel for git repositories"
 authors = ["repos-control"]
 edition = "2021"
@@ -22,6 +22,9 @@ tauri-build = { version = "2.0.0", features = [] }
 tauri = { version = "2.0.0", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-logs = { path = "../../my-tauri-plugins/tauri-plugin-logs" }
+tauri-plugin-llama-engine = { path = "../../my-tauri-plugins/tauri-plugin-llama-engine" }
+tauri-plugin-cloud-routers = { path = "../../my-tauri-plugins/tauri-plugin-cloud-routers" }
+ko-json-store = { path = "../../my-tauri-plugins/ko-json-store" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"

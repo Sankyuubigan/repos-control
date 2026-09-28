@@ -9,6 +9,9 @@ import {
   hideModal,
 } from './render.js';
 import { bindCommitPanelHandlers, openCommitPanel, refreshPanel, renderPanelSections } from './commitPanel.js';
+import { initSettings, refreshSettings } from './settings.js';
+
+window.__settingsRefresh = refreshSettings;
 
 window.addEventListener('error', (event) => {
   api.logFront(`[global-error] ${event.message} @ ${event.filename}:${event.lineno}`);
@@ -162,8 +165,12 @@ function onTabClick(event) {
   document.querySelectorAll('.tab-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.tab === tab);
   });
-  document.getElementById('tab-projects').classList.toggle('hidden', tab !== 'projects');
-  document.getElementById('tab-logs').classList.toggle('hidden', tab !== 'logs');
+  document.querySelectorAll('.tab-pane').forEach((pane) => {
+    pane.classList.toggle('hidden', pane.id !== `tab-${tab}`);
+  });
+  if (tab === 'settings') {
+    window.__settingsRefresh?.();
+  }
 }
 
 function onModalClick(event) {
@@ -196,6 +203,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { path, ...status } = payload;
     onStatusChanged(path, status);
   });
+
+  initSettings();
 
   await refreshAll();
 });
