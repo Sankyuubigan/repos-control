@@ -1,5 +1,22 @@
 use std::path::{Path, PathBuf};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffScope {
+    Staged,
+    Unstaged,
+    All,
+}
+
+impl DiffScope {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DiffScope::Staged => "staged",
+            DiffScope::Unstaged => "unstaged",
+            DiffScope::All => "all",
+        }
+    }
+}
+
 pub trait CommitDraftStore: Send + Sync {
     fn read_draft(&self, project_path: &Path) -> Result<String, anyhow::Error>;
     fn write_draft(&self, project_path: &Path, message: &str) -> Result<(), anyhow::Error>;
@@ -21,7 +38,7 @@ pub trait ConfigStore: Send + Sync {
 
 pub trait GitApi: Send + Sync {
     fn status(&self, project_path: &Path) -> Result<ProjectStatus, anyhow::Error>;
-    fn collect_diff(&self, project_path: &Path, staged_first: bool) -> Result<String, anyhow::Error>;
+    fn collect_diff(&self, project_path: &Path, scope: DiffScope) -> Result<String, anyhow::Error>;
 }
 
 pub trait GitWriteApi: Send + Sync {

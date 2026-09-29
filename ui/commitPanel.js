@@ -1,7 +1,7 @@
 import * as api from './api.js';
 import * as optimistic from './optimistic.js';
 import { state, setStatus } from './state.js';
-import { esc, projectName, renderStatusSlot, renderProjectList, showModal } from './render.js';
+import { esc, projectName, renderStatusSlot, renderProjectList } from './render.js';
 import { fileIconHtml } from './fileIcons.js';
 
 const panelEl = document.getElementById('commit-panel');
@@ -129,10 +129,23 @@ function renderPanelBody() {
       <div class="panel-actions">
         <span class="panel-hint">Черновик сохраняется автоматически</span>
         <button id="btn-panel-commit" class="btn btn-primary">Коммит</button>
-        <button id="btn-panel-generate" class="btn">Сгенерировать сообщение</button>
         <button id="btn-panel-push" class="btn">Запушить</button>
       </div>
       <div class="error-banner hidden" data-slot="panel-error"></div>
+    </div>
+    <div class="generate-panel">
+      <div class="generate-panel-head">
+        <span class="generate-panel-title">Генерация сообщения</span>
+        <span class="generate-spinner hidden" data-slot="generate-spinner"></span>
+      </div>
+      <textarea id="generate-notes" rows="2" placeholder="Заметки разработчика (необязательно)…"></textarea>
+      <div class="generate-scope">
+        <label><input type="radio" name="generate-scope" value="staged" ${state.commitScope === 'staged' ? 'checked' : ''}> Стейдж индекс</label>
+        <label><input type="radio" name="generate-scope" value="unstaged" ${state.commitScope === 'unstaged' ? 'checked' : ''}> Остальные изменения</label>
+        <label><input type="radio" name="generate-scope" value="all" ${state.commitScope === 'all' ? 'checked' : ''}> Все незакоммиченные</label>
+      </div>
+      <button id="btn-panel-generate" class="btn">Сгенерировать сообщение</button>
+      <div class="generate-result hidden" data-slot="generate-result"></div>
     </div>
   </div>`;
 }
@@ -317,25 +330,45 @@ async function onPanelGenerate() {
   if (!path) {
     return;
   }
-  const notes = window.prompt('Заметки разработчика (необязательно, игнорируются если нерелевантно):', '');
-  if (notes === null) {
-    return;
-  }
+  const notesEl = panelEl.querySelector('#generate-notes');
+  const scopeEl = panelEl.querySelector('input[name="generate-scope"]:checked');
+  const resultSlot = panelEl.querySelector('[data-slot="generate-result"]');
+  const spinner = panelEl.querySelector('[data-slot="generate-spinner"]');
+  const notes = notesEl ? notesEl.value : '';
+  const scope = scopeEl ? scopeEl.value : 'staged';
+  state.commitScope = scope;
   if (!state.commitModel) {
     setPanelError('Модель не выбрана. Откройте «Настройки» и выберите модель для commit-сообщений.');
     return;
   }
   setBusy(true);
   setPanelError('');
+  if (spinner) {
+    spinner.classList.remove('hidden');
+  }
+  if (resultSlot) {
+    resultSlot.classList.add('hidden');
+    resultSlot.textContent = '';
+  }
   try {
-    const messages = await api.getCommitDiff(path, notes, state.commitLang || 'ru');
+    const lang = state.commitLang || 'ru';
+    api.logFront(`[generate] path=${path} lang=${lang} scope=${scope} model=${state.commitModel} notes=${notes.length} chars`);
+    const messages = await api.getCommitDiff(path, notes, lang, scope);
+    api.logFront(`[generate] messages count=${messages.length} system=${messages[0]?.content?.slice(0, 80)}...`);
     const message = await generateViaPlugin(state.commitModel, messages);
-    showModal('Commit-сообщение', message);
+    api.logFront(`[generate] result=${message.slice(0, 120)}...`);
+    if (resultSlot) {
+      resultSlot.textContent = message;
+      resultSlot.classList.remove('hidden');
+    }
   } catch (err) {
     setPanelError(String(err));
     api.logFront(`[generate] ${String(err)}`);
   } finally {
     setBusy(false);
+    if (spinner) {
+      spinner.classList.add('hidden');
+    }
   }
 }
 

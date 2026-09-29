@@ -9,7 +9,7 @@ use gix::bstr::{BString, ByteSlice};
 use gix::diff::blob::unified_diff::{ConsumeBinaryHunk, ContextSize};
 use gix::diff::blob::{diff_with_slider_heuristics, Algorithm, InternedInput, UnifiedDiff};
 
-use crate::domain::contracts::GitApi;
+use crate::domain::contracts::{DiffScope, GitApi};
 use crate::domain::project::{ChangeKind, ChangedFile, FileChange, ProjectStatus};
 
 pub struct GixGit {
@@ -152,7 +152,7 @@ impl GitApi for GixGit {
         result
     }
 
-    fn collect_diff(&self, project_path: &Path, staged_first: bool) -> Result<String> {
+    fn collect_diff(&self, project_path: &Path, scope: DiffScope) -> Result<String> {
         let started = Instant::now();
         let done = Arc::new(AtomicBool::new(false));
         let interrupt = Arc::new(AtomicBool::new(false));
@@ -167,22 +167,35 @@ impl GitApi for GixGit {
             let repo = open_repo(project_path)?;
             let snap = collect_snapshot(&repo, &interrupt, deadline)?;
 
-            let staged: Vec<&FileChange> = snap
-                .staged
-                .iter()
-                .filter(|c| c.kind != ChangeKind::Removed)
-                .collect();
-
-            let entries: Vec<&FileChange> = if staged_first && !staged.is_empty() {
-                staged
-            } else {
-                let mut fallback: Vec<&FileChange> = snap
-                    .unstaged
+            let entries: Vec<&FileChange> = match scope {
+                DiffScope::Staged => snap
+                    .staged
                     .iter()
                     .filter(|c| c.kind != ChangeKind::Removed)
-                    .collect();
-                fallback.extend(snap.untracked.iter());
-                fallback
+                    .collect(),
+                DiffScope::Unstaged => {
+                    let mut v: Vec<&FileChange> = snap
+                        .unstaged
+                        .iter()
+                        .filter(|c| c.kind != ChangeKind::Removed)
+                        .collect();
+                    v.extend(snap.untracked.iter());
+                    v
+                }
+                DiffScope::All => {
+                    let mut v: Vec<&FileChange> = snap
+                        .staged
+                        .iter()
+                        .filter(|c| c.kind != ChangeKind::Removed)
+                        .collect();
+                    v.extend(
+                        snap.unstaged
+                            .iter()
+                            .filter(|c| c.kind != ChangeKind::Removed),
+                    );
+                    v.extend(snap.untracked.iter());
+                    v
+                }
             };
 
             let mut blocks: Vec<String> = Vec::new();

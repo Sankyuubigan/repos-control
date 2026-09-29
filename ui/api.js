@@ -45,8 +45,8 @@ export function generateCommitMessage(projectPath, notes) {
   return invoke('generate_commit_message', { projectPath, notes });
 }
 
-export function getCommitDiff(projectPath, notes, lang) {
-  return invoke('get_commit_diff', { projectPath, notes, lang });
+export function getCommitDiff(projectPath, notes, lang, scope) {
+  return invoke('get_commit_diff', { projectPath, notes, lang, scope });
 }
 
 export function getCommitModel() {

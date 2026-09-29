@@ -541,3 +541,87 @@ body {
   padding: 12px 16px;
   border-top: 1px solid var(--border);
 }
+
+.generate-panel {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.generate-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.generate-panel-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.generate-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.generate-panel textarea {
+  width: 100%;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.generate-panel textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.generate-scope {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.generate-scope label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.generate-scope input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+.generate-result {
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}

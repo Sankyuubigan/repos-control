@@ -9,6 +9,7 @@ export const state = {
   panelSaveTimer: null,
   commitModel: '',
   commitLang: 'ru',
+  commitScope: 'staged',
 };
 
 export function setProjects(projects) {

@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::domain::contracts::DiffScope;
+
 pub const SYSTEM_PROMPT: &str = "Ты — полезный ассистент, который генерирует информативные git commit-сообщения на основе вывода git diff. Пропусти преамбулу и убери все обратные кавычки вокруг commit-сообщения.";
 
 pub const INSTRUCTION_PROMPT: &str = "На основе предоставленного git diff сгенерируй краткое и ёмкое commit-сообщение. Руководствуйся следующими правилами:
@@ -17,10 +19,15 @@ pub struct ChatMessage {
     pub content: String,
 }
 
-pub fn build_messages(notes: &str, diff: &str, lang: &str) -> Vec<ChatMessage> {
+pub fn build_messages(notes: &str, diff: &str, lang: &str, scope: DiffScope) -> Vec<ChatMessage> {
     let truncated = truncate_diff(diff);
+    let scope_label = match scope {
+        DiffScope::Staged => "стейдж индекс",
+        DiffScope::Unstaged => "остальные изменения",
+        DiffScope::All => "все незакоммиченные изменения",
+    };
     let user = format!(
-        "Заметки разработчика (игнорируй, если нерелевантно): {notes}\n\nИзменения:\n{truncated}\n\nОтветь на языке: {lang}."
+        "Заметки разработчика (игнорируй, если нерелевантно): {notes}\n\nИзменения ({scope_label}):\n{truncated}\n\nОтветь на языке: {lang}."
     );
     vec![
         ChatMessage {

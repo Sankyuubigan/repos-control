@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::domain::commit_prompt;
-use crate::domain::contracts::{CommitDraftStore, ConfigStore, GitApi, GitWriteApi};
+use crate::domain::contracts::{CommitDraftStore, ConfigStore, DiffScope, GitApi, GitWriteApi};
 use crate::domain::project::{Project, ProjectStatus};
 
 pub fn list_projects<C: ConfigStore + ?Sized>(store: &C) -> Vec<Project> {
@@ -27,15 +27,16 @@ pub fn get_commit_diff<G: GitApi + ?Sized>(
     project_path: &Path,
     notes: &str,
     lang: &str,
+    scope: DiffScope,
 ) -> Result<Vec<commit_prompt::ChatMessage>, String> {
-    let diff = git.collect_diff(project_path, true).map_err(|err| {
+    let diff = git.collect_diff(project_path, scope).map_err(|err| {
         log::error!("collect_diff failed: {err:#}");
         format!("Не удалось собрать diff: {err}")
     })?;
     if diff.trim().is_empty() {
         return Err("Нет изменений для коммита".to_string());
     }
-    Ok(commit_prompt::build_messages(notes, &diff, lang))
+    Ok(commit_prompt::build_messages(notes, &diff, lang, scope))
 }
 
 pub fn add_project<C: ConfigStore + ?Sized>(store: &C, path: &Path) -> Result<(), String> {
