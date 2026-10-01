@@ -7,16 +7,6 @@ pub enum DiffScope {
     All,
 }
 
-impl DiffScope {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            DiffScope::Staged => "staged",
-            DiffScope::Unstaged => "unstaged",
-            DiffScope::All => "all",
-        }
-    }
-}
-
 pub trait CommitDraftStore: Send + Sync {
     fn read_draft(&self, project_path: &Path) -> Result<String, anyhow::Error>;
     fn write_draft(&self, project_path: &Path, message: &str) -> Result<(), anyhow::Error>;

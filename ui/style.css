@@ -141,7 +141,9 @@ body {
   flex-direction: column;
 }
 
-.commit-panel.panel-busy { opacity: 0.6; pointer-events: none; }
+/* Панель НЕ блокируется на время операции: крутилка показывает ход дела,
+   блокируются только кнопки самих git-операций (см. statusView.js). */
+.commit-panel.panel-busy .btn:disabled { cursor: progress; }
 
 .panel-head {
   display: flex;
@@ -172,6 +174,28 @@ body {
 }
 
 .panel-busy .panel-spinner { display: inline-block; }
+
+.panel-pending {
+  color: var(--accent);
+  margin-left: 8px;
+}
+
+.panel-pending:empty { margin-left: 0; }
+
+/* Крутилка на карточке проекта: статус обновляется или идёт операция. */
+.card-spinner {
+  display: none;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+.card-loading .card-spinner { display: inline-block; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 

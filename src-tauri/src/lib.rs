@@ -46,9 +46,8 @@ pub fn run() {
                 .collect();
             match WatcherManager::new(
                 app.handle().clone(),
-                Arc::clone(&services.git),
-                Arc::clone(&services.busy),
-                Arc::clone(&services.status_slots),
+                Arc::clone(&services.status),
+                Arc::clone(&services.writes),
             ) {
                 Ok(watcher) => {
                     watcher.set_project_paths(&paths);

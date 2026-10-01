@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, isLoading, isPending } from './state.js';
 import { fileIconHtml } from './fileIcons.js';
 
 const listEl = document.getElementById('project-list');
@@ -16,12 +16,14 @@ function badge(label, cls, title, muted) {
 }
 
 function renderStatus(path) {
+  const busy = isLoading(path) || isPending(path);
+  const spin = busy ? '<span class="card-spinner"></span>' : '';
   const st = state.statuses[path];
   if (!st) {
-    return badge('…', 'branch', 'загрузка');
+    return `${spin}${badge('…', 'branch', 'загрузка')}`;
   }
   if (!st.isRepo) {
-    return `<div class="error-banner">${esc(st.error || 'Репозиторий недоступен')}</div>`;
+    return `${spin}<div class="error-banner">${esc(st.error || 'Репозиторий недоступен')}</div>`;
   }
   const badges = [];
   badges.push(badge(st.branch || '(нет ветки)', 'branch', `ветка: ${st.branch}`));
@@ -37,7 +39,7 @@ function renderStatus(path) {
   if (st.error) {
     badges.push(`<span class="error-banner">${esc(st.error)}</span>`);
   }
-  return badges.join('');
+  return `${spin}${badges.join('')}`;
 }
 
 export function projectName(path) {

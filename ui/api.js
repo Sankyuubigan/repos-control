@@ -1,6 +1,6 @@
 const invoke = window.__TAURI__.core.invoke;
 
-const STATUS_TIMEOUT = 20000;
+const STATUS_TIMEOUT = 30000;
 
 export function withTimeout(promise, ms, label) {
   let timer;
@@ -33,6 +33,7 @@ export function pickProjectFolder() {
   return invoke('pick_project_folder');
 }
 
+/** Чтение статуса. Ответ — снапшот `{path, seq, ...status}`. */
 export function getProjectStatus(projectPath) {
   return withTimeout(
     invoke('get_project_status', { projectPath }),
@@ -41,16 +42,8 @@ export function getProjectStatus(projectPath) {
   );
 }
 
-export function generateCommitMessage(projectPath, notes) {
-  return invoke('generate_commit_message', { projectPath, notes });
-}
-
 export function getCommitDiff(projectPath, notes, lang, scope) {
   return invoke('get_commit_diff', { projectPath, notes, lang, scope });
-}
-
-export function getCommitModel() {
-  return invoke('get_commit_model');
 }
 
 export function setCommitModel(model) {
@@ -65,6 +58,11 @@ export function setCommitLang(lang) {
   return invoke('set_commit_lang', { lang });
 }
 
+/*
+ * Команды записи возвращают СВЕЖИЙ статус проекта в том же ответе: запись уже
+ * выполнена, состояние прочитано заново. Дополнительный запрос статуса не нужен
+ * и не мог бы вернуть состояние «до операции».
+ */
 export function stageFiles(projectPath, paths) {
   return invoke('stage_files', { projectPath, paths });
 }

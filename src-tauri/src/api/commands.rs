@@ -1,25 +1,23 @@
-use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
 use tauri::{AppHandle, Manager, State};
 
 use crate::domain::contracts::{CommitDraftStore, ConfigStore, GitApi, GitWriteApi};
-use crate::domain::project::{Project, ProjectStatus};
+use crate::domain::project::Project;
 use crate::domain::usecases;
-use crate::infra::{FileCommitDraftStore, FileConfigStore, Git2Write, GixGit, WatcherManager};
-
-const STATUS_COMMAND_TIMEOUT: Duration = Duration::from_secs(40);
-const STATUS_SLOTS: usize = 4;
+use crate::infra::{
+    FileCommitDraftStore, FileConfigStore, Git2Write, GixGit, StatusHub, StatusSnapshot,
+    WatcherManager, WriteRegistry,
+};
 
 pub struct Services {
     pub config: Arc<dyn ConfigStore>,
     pub git: Arc<dyn GitApi>,
     pub write_git: Arc<dyn GitWriteApi>,
     pub draft_store: Arc<dyn CommitDraftStore>,
-    pub busy: Arc<AtomicBool>,
-    pub status_slots: Arc<tokio::sync::Semaphore>,
+    pub writes: Arc<WriteRegistry>,
+    pub status: Arc<StatusHub>,
 }
 
 impl Services {
@@ -27,23 +25,27 @@ impl Services {
         let config = FileConfigStore::new().map_err(|err| format!("config init: {err:#}"))?;
         let draft_store =
             FileCommitDraftStore::new().map_err(|err| format!("draft store init: {err:#}"))?;
+        let git: Arc<dyn GitApi> = Arc::new(GixGit::new());
         Ok(Self {
             config: Arc::new(config),
-            git: Arc::new(GixGit::new()),
+            git: Arc::clone(&git),
             write_git: Arc::new(Git2Write),
             draft_store: Arc::new(draft_store),
-            busy: Arc::new(AtomicBool::new(false)),
-            status_slots: Arc::new(tokio::sync::Semaphore::new(STATUS_SLOTS)),
+            writes: Arc::new(WriteRegistry::new()),
+            status: Arc::new(StatusHub::new(git)),
         })
     }
 }
 
 fn refresh_watcher(app: &AppHandle, services: &Services) {
-    let paths: Vec<std::path::PathBuf> = usecases::list_projects(&*services.config)
+    let paths: Vec<PathBuf> = usecases::list_projects(&*services.config)
         .into_iter()
         .map(|p| p.path)
         .collect();
-    app.state::<WatcherManager>().set_project_paths(&paths);
+    match app.try_state::<WatcherManager>() {
+        Some(watcher) => watcher.set_project_paths(&paths),
+        None => log::warn!("refresh_watcher: watcher не инициализирован, пути не обновлены"),
+    }
 }
 
 #[tauri::command]
@@ -79,7 +81,7 @@ pub fn reorder_projects(
     services: State<'_, Services>,
     paths: Vec<String>,
 ) -> Result<(), String> {
-    let paths: Vec<std::path::PathBuf> = paths.into_iter().map(std::path::PathBuf::from).collect();
+    let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
     usecases::reorder_projects(&*services.config, &paths)?;
     refresh_watcher(&app, &services);
     Ok(())
@@ -89,25 +91,8 @@ pub fn reorder_projects(
 pub async fn get_project_status(
     services: State<'_, Services>,
     project_path: String,
-) -> Result<ProjectStatus, String> {
-    let _permit = services
-        .status_slots
-        .acquire()
-        .await
-        .map_err(|err| format!("Ошибка слота статуса: {err}"))?;
-    let git = Arc::clone(&services.inner().git);
-    let what = project_path.clone();
-    let task = tauri::async_runtime::spawn_blocking(move || {
-        usecases::get_project_status(git.as_ref(), Path::new(&project_path))
-    });
-    match tokio::time::timeout(STATUS_COMMAND_TIMEOUT, task).await {
-        Ok(Ok(result)) => Ok(result),
-        Ok(Err(err)) => Err(format!("Ошибка фоновой задачи: {err}")),
-        Err(_) => {
-            log::error!("get_project_status {what}: превышен внешний таймаут");
-            Err("Таймаут получения статуса".to_string())
-        }
-    }
+) -> Result<StatusSnapshot, String> {
+    services.status.read(Path::new(&project_path)).await
 }
 
 #[tauri::command]
@@ -121,17 +106,22 @@ pub async fn pick_project_folder(app: tauri::AppHandle) -> Result<Option<String>
     .map_err(|err| format!("Ошибка диалога: {err}"))?
 }
 
+/// Общая часть всех команд записи: запись → **свежий** статус в том же ответе.
+///
+/// Раньше команда возвращала `()`, фронт делал второй запрос `get_project_status`,
+/// и тот попадал в TTL-кэш — UI показывал состояние «до операции». Теперь ответ
+/// содержит фактическое состояние сразу после записи (один round-trip, гонок нет).
 async fn run_write(
-    busy: Arc<AtomicBool>,
+    status: Arc<StatusHub>,
+    writes: Arc<WriteRegistry>,
     write_git: Arc<dyn GitWriteApi>,
     project_path: String,
     action: impl FnOnce(&dyn GitWriteApi, &Path) -> Result<(), String> + Send + 'static,
-) -> Result<(), String> {
+) -> Result<StatusSnapshot, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        busy.store(true, Ordering::SeqCst);
-        let result = action(write_git.as_ref(), Path::new(&project_path));
-        busy.store(false, Ordering::SeqCst);
-        result
+        let _guard = writes.begin(Path::new(&project_path));
+        action(write_git.as_ref(), Path::new(&project_path))?;
+        Ok(status.read_blocking(Path::new(&project_path)))
     })
     .await
     .map_err(|err| format!("Ошибка фоновой задачи: {err}"))?
@@ -142,12 +132,16 @@ pub async fn stage_files(
     services: State<'_, Services>,
     project_path: String,
     paths: Vec<String>,
-) -> Result<(), String> {
-    let write_git = Arc::clone(&services.inner().write_git);
-    let busy = Arc::clone(&services.inner().busy);
-    run_write(busy, write_git, project_path, move |git, path| {
-        usecases::stage_files(git, path, paths.clone())
-    })
+) -> Result<StatusSnapshot, String> {
+    let inner = services.inner();
+    let write_git = Arc::clone(&inner.write_git);
+    run_write(
+        Arc::clone(&inner.status),
+        Arc::clone(&inner.writes),
+        write_git,
+        project_path,
+        move |git, path| usecases::stage_files(git, path, paths.clone()),
+    )
     .await
 }
 
@@ -156,12 +150,16 @@ pub async fn unstage_files(
     services: State<'_, Services>,
     project_path: String,
     paths: Vec<String>,
-) -> Result<(), String> {
-    let write_git = Arc::clone(&services.inner().write_git);
-    let busy = Arc::clone(&services.inner().busy);
-    run_write(busy, write_git, project_path, move |git, path| {
-        usecases::unstage_files(git, path, paths.clone())
-    })
+) -> Result<StatusSnapshot, String> {
+    let inner = services.inner();
+    let write_git = Arc::clone(&inner.write_git);
+    run_write(
+        Arc::clone(&inner.status),
+        Arc::clone(&inner.writes),
+        write_git,
+        project_path,
+        move |git, path| usecases::unstage_files(git, path, paths.clone()),
+    )
     .await
 }
 
@@ -170,12 +168,16 @@ pub async fn discard_files(
     services: State<'_, Services>,
     project_path: String,
     paths: Vec<String>,
-) -> Result<(), String> {
-    let write_git = Arc::clone(&services.inner().write_git);
-    let busy = Arc::clone(&services.inner().busy);
-    run_write(busy, write_git, project_path, move |git, path| {
-        usecases::discard_files(git, path, paths.clone())
-    })
+) -> Result<StatusSnapshot, String> {
+    let inner = services.inner();
+    let write_git = Arc::clone(&inner.write_git);
+    run_write(
+        Arc::clone(&inner.status),
+        Arc::clone(&inner.writes),
+        write_git,
+        project_path,
+        move |git, path| usecases::discard_files(git, path, paths.clone()),
+    )
     .await
 }
 
@@ -184,35 +186,34 @@ pub async fn commit_changes(
     services: State<'_, Services>,
     project_path: String,
     message: String,
-) -> Result<(), String> {
-    let write_git = Arc::clone(&services.inner().write_git);
-    let draft_store = Arc::clone(&services.inner().draft_store);
-    let busy = Arc::clone(&services.inner().busy);
-    tauri::async_runtime::spawn_blocking(move || {
-        busy.store(true, Ordering::SeqCst);
-        let result = usecases::commit_changes(
-            write_git.as_ref(),
-            draft_store.as_ref(),
-            Path::new(&project_path),
-            &message,
-        );
-        busy.store(false, Ordering::SeqCst);
-        result
-    })
+) -> Result<StatusSnapshot, String> {
+    let inner = services.inner();
+    let write_git = Arc::clone(&inner.write_git);
+    let draft_store = Arc::clone(&inner.draft_store);
+    run_write(
+        Arc::clone(&inner.status),
+        Arc::clone(&inner.writes),
+        write_git,
+        project_path,
+        move |git, path| usecases::commit_changes(git, draft_store.as_ref(), path, &message),
+    )
     .await
-    .map_err(|err| format!("Ошибка фоновой задачи: {err}"))?
 }
 
 #[tauri::command]
 pub async fn push_changes(
     services: State<'_, Services>,
     project_path: String,
-) -> Result<(), String> {
-    let write_git = Arc::clone(&services.inner().write_git);
-    let busy = Arc::clone(&services.inner().busy);
-    run_write(busy, write_git, project_path, |git, path| {
-        usecases::push_changes(git, Path::new(path))
-    })
+) -> Result<StatusSnapshot, String> {
+    let inner = services.inner();
+    let write_git = Arc::clone(&inner.write_git);
+    run_write(
+        Arc::clone(&inner.status),
+        Arc::clone(&inner.writes),
+        write_git,
+        project_path,
+        move |git, path| usecases::push_changes(git, path),
+    )
     .await
 }
 

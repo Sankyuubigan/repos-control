@@ -1,14 +1,25 @@
 import * as api from './api.js';
-import { state, setProjects, setStatus } from './state.js';
+import {
+  state,
+  setProjects,
+  setStatus,
+  setLoading,
+  applySnapshot,
+  forgetProject,
+} from './state.js';
 import {
   renderProjectList,
   renderStatusSlot,
-  renderFilesSlot,
   renderStatusBar,
   showModal,
   hideModal,
 } from './render.js';
-import { bindCommitPanelHandlers, openCommitPanel, refreshPanel, renderPanelSections } from './commitPanel.js';
+import {
+  bindCommitPanelHandlers,
+  openCommitPanel,
+  refreshPanel,
+  renderStatusFor,
+} from './commitPanel.js';
 import { initSettings, refreshSettings } from './settings.js';
 
 window.__settingsRefresh = refreshSettings;
@@ -23,27 +34,34 @@ window.addEventListener('unhandledrejection', (event) => {
   api.logFront(`[unhandledrejection] ${text}`);
 });
 
-function onStatusChanged(path, status) {
-  setStatus(path, status);
-  renderStatusSlot(path);
-  if (state.panelPath === path) {
-    renderPanelSections();
+/**
+ * Статус пришёл из фонового watcher-а. Устаревшее чтение (seq меньше уже
+ * применённого) игнорируем — иначе поздний ответ перерисовал бы панель
+ * состоянием «до операции».
+ */
+function onStatusChanged(snapshot) {
+  if (!applySnapshot(snapshot)) {
+    api.logFront(`[status-changed] ${snapshot?.path}: устаревший seq=${snapshot?.seq}, игнор`);
+    return;
   }
+  setLoading(snapshot.path, false);
+  renderStatusFor(snapshot.path);
 }
 
 async function refreshStatuses() {
   const paths = state.projects.map((p) => p.path);
+  paths.forEach((path) => setLoading(path, true));
+  renderProjectList();
   await Promise.all(
     paths.map(async (path) => {
       try {
-        const status = await api.getProjectStatus(path);
-        api.logFront(`[refreshStatuses] ${path}: ok`);
-        setStatus(path, status);
-        renderStatusSlot(path);
+        applySnapshot(await api.getProjectStatus(path));
       } catch (err) {
         const message = String(err);
         api.logFront(`[refreshStatuses] ${path}: ${message}`);
         setStatus(path, { isRepo: false, error: message });
+      } finally {
+        setLoading(path, false);
         renderStatusSlot(path);
       }
     }),
@@ -51,12 +69,9 @@ async function refreshStatuses() {
 }
 
 async function refreshAll() {
-  state.busy = true;
   renderStatusBar(true);
   try {
-    const projects = await api.listProjects();
-    setProjects(projects);
-    renderProjectList();
+    setProjects(await api.listProjects());
     await refreshStatuses();
     if (state.panelPath) {
       await refreshPanel();
@@ -64,7 +79,6 @@ async function refreshAll() {
   } catch (err) {
     api.logFront(`[refreshAll] ${String(err)}`);
   } finally {
-    state.busy = false;
     renderStatusBar(false);
   }
 }
@@ -107,7 +121,7 @@ async function onRemoveProject(path) {
   }
   try {
     await api.removeProject(path);
-    delete state.statuses[path];
+    forgetProject(path);
     await refreshAll();
   } catch (err) {
     showModal('Ошибка', String(err));
@@ -139,7 +153,7 @@ async function onListClick(event) {
       } else {
         state.filesOpen.add(path);
       }
-      renderFilesSlot(path);
+      renderStatusSlot(path);
       break;
   }
 }
@@ -199,9 +213,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('modal-actions').addEventListener('click', onModalClick);
 
-  api.listenStatusChanged((payload) => {
-    const { path, ...status } = payload;
-    onStatusChanged(path, status);
+  api.listenStatusChanged(onStatusChanged);
+
+  // Возврат к окну — момент, когда пользователь точно ждёт актуальных данных
+  // (он что-то делал в редакторе/терминале). Обновляем сразу, без кнопки.
+  window.addEventListener('focus', () => {
+    api.logFront('[focus] перечитываю статусы');
+    refreshAll();
   });
 
   initSettings();

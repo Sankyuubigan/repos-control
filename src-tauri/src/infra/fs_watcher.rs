@@ -1,28 +1,27 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use notify::{Event, RecursiveMode, RecommendedWatcher, Watcher};
 use tauri::{AppHandle, Emitter};
 
-use crate::domain::contracts::GitApi;
-use crate::domain::project::ProjectStatus;
-use crate::domain::usecases;
+use crate::infra::status_hub::{StatusHub, StatusSnapshot};
+use crate::infra::write_registry::WriteRegistry;
 
+/// Пауза перед перечитыванием после события файловой системы: жмём один раз
+/// после серии правок, а не после каждого файла.
 const DEBOUNCE: Duration = Duration::from_millis(1000);
+/// Минимальный интервал между перечитываниями одного проекта.
 const MIN_INTERVAL: Duration = Duration::from_secs(5);
+/// Пауза перед повторной попыткой, если перечитывание не удалось выполнить
+/// сейчас (идёт запись или сработал троттлинг).
+const RETRY_DELAY: Duration = Duration::from_millis(1000);
 const EVENT_NAME: &str = "status-changed";
+const IDLE_TICK: Duration = Duration::from_secs(30);
 
 type Sender = mpsc::Sender<PathBuf>;
-
-#[derive(serde::Serialize)]
-struct StatusPayload {
-    path: String,
-    #[serde(flatten)]
-    status: ProjectStatus,
-}
 
 pub struct WatcherManager {
     watchers: Mutex<HashMap<PathBuf, RecommendedWatcher>>,
@@ -33,14 +32,13 @@ pub struct WatcherManager {
 impl WatcherManager {
     pub fn new(
         app: AppHandle,
-        git: Arc<dyn GitApi>,
-        busy: Arc<AtomicBool>,
-        slots: Arc<tokio::sync::Semaphore>,
+        status: Arc<StatusHub>,
+        writes: Arc<WriteRegistry>,
     ) -> Result<Self, String> {
         let (sender, receiver) = mpsc::channel::<PathBuf>();
         let worker = std::thread::Builder::new()
             .name("fs-watcher".into())
-            .spawn(move || worker_loop(&app, &receiver, git, busy, slots))
+            .spawn(move || worker_loop(&app, &receiver, status, writes))
             .map_err(|err| format!("cannot spawn fs-watcher thread: {err}"))?;
         Ok(Self {
             watchers: Mutex::new(HashMap::new()),
@@ -101,6 +99,8 @@ fn is_noise(path: &Path) -> bool {
         "\\target",
         "\\.git\\objects",
         "\\.git\\tmp",
+        // Служебная блокировка индекса: меняется на каждый чих, статуса не касается.
+        "\\.git\\index.lock",
         "\\test\\last_logs.txt",
     ]
     .iter()
@@ -110,23 +110,27 @@ fn is_noise(path: &Path) -> bool {
 fn worker_loop(
     app: &AppHandle,
     receiver: &mpsc::Receiver<PathBuf>,
-    git: Arc<dyn GitApi>,
-    busy: Arc<AtomicBool>,
-    slots: Arc<tokio::sync::Semaphore>,
+    status: Arc<StatusHub>,
+    writes: Arc<WriteRegistry>,
 ) {
     let mut pending: HashMap<PathBuf, Instant> = HashMap::new();
     let mut last_runs: HashMap<PathBuf, Instant> = HashMap::new();
     loop {
-        fire_due(&app, &git, &busy, &slots, &mut pending, &mut last_runs);
-        let wait = pending_deadline(&pending);
-        let wait = match wait {
+        fire_due(
+            &app,
+            &status,
+            &writes,
+            &mut pending,
+            &mut last_runs,
+        );
+        let wait = match pending_deadline(&pending) {
             Some(deadline) => deadline.saturating_duration_since(Instant::now()),
-            None => Duration::MAX,
+            None => IDLE_TICK,
         };
+        let wait = wait.min(IDLE_TICK);
         if wait.is_zero() {
             continue;
         }
-        let wait = wait.min(Duration::from_secs(30));
         match receiver.recv_timeout(wait) {
             Ok(path) => {
                 pending.insert(path, Instant::now() + DEBOUNCE);
@@ -143,9 +147,8 @@ fn pending_deadline(pending: &HashMap<PathBuf, Instant>) -> Option<Instant> {
 
 fn fire_due(
     app: &AppHandle,
-    git: &Arc<dyn GitApi>,
-    busy: &AtomicBool,
-    slots: &Arc<tokio::sync::Semaphore>,
+    status: &Arc<StatusHub>,
+    writes: &Arc<WriteRegistry>,
     pending: &mut HashMap<PathBuf, Instant>,
     last_runs: &mut HashMap<PathBuf, Instant>,
 ) {
@@ -157,55 +160,55 @@ fn fire_due(
         .collect();
     for path in due {
         pending.remove(&path);
-        if busy.load(Ordering::SeqCst) {
-            log::info!("skip status refresh for {}: operation in progress", path.display());
+        // Событие НИКОГДА не теряется: если перечитать сейчас нельзя, оно
+        // перевзводится в очередь и будет обработано позже. Раньше здесь был
+        // `continue` без перевзвода — изменение пропадало навсегда.
+        if writes.is_writing(&path) {
+            log::debug!("status {} отложен: идёт запись", path.display());
+            defer(pending, &path);
             continue;
         }
         if last_runs
             .get(&path)
             .is_some_and(|prev| prev.elapsed() < MIN_INTERVAL)
         {
-            log::info!("skip status refresh for {}: recent refresh", path.display());
+            log::debug!("status {} отложен: недавнее перечитывание", path.display());
+            defer(pending, &path);
             continue;
         }
         let app = app.clone();
-        let git = Arc::clone(git);
-        let slots = Arc::clone(slots);
+        let status = Arc::clone(status);
         let path_in_thread = path.clone();
         if let Err(err) = std::thread::Builder::new()
             .name("status-refresh".into())
             .spawn(move || {
-                let _permit = loop {
-                    match slots.try_acquire() {
-                        Ok(permit) => break permit,
-                        Err(_) => std::thread::sleep(Duration::from_millis(100)),
-                    }
-                };
-                run_and_emit(&app, git.as_ref(), &path_in_thread);
+                run_and_emit(&app, status.as_ref(), &path_in_thread);
             })
         {
             log::warn!("status refresh thread spawn failed for {}: {err}", path.display());
+            defer(pending, &path);
+            continue;
         }
         last_runs.insert(path, Instant::now());
     }
 }
 
-fn run_and_emit(app: &AppHandle, git: &dyn GitApi, path: &Path) {
+fn defer(pending: &mut HashMap<PathBuf, Instant>, path: &Path) {
+    pending.insert(path.to_path_buf(), Instant::now() + RETRY_DELAY);
+}
+
+fn run_and_emit(app: &AppHandle, status: &StatusHub, path: &Path) {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        usecases::get_project_status(git, path)
+        status.read_blocking(path)
     }));
-    let status = match result {
-        Ok(status) => status,
+    let snapshot: StatusSnapshot = match result {
+        Ok(snapshot) => snapshot,
         Err(_) => {
             log::error!("status refresh panicked for {}", path.display());
             return;
         }
     };
-    let payload = StatusPayload {
-        path: path.to_string_lossy().into_owned(),
-        status,
-    };
-    if let Err(err) = app.emit(EVENT_NAME, &payload) {
+    if let Err(err) = app.emit(EVENT_NAME, &snapshot) {
         log::warn!("status emit failed for {}: {err}", path.display());
     }
 }
