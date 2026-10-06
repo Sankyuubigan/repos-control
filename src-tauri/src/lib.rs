@@ -66,6 +66,7 @@ pub fn run() {
             api::commands::reorder_projects,
             api::commands::get_project_status,
             api::settings_commands::get_commit_diff,
+            api::settings_commands::estimate_commit_prompt,
             api::settings_commands::get_commit_model,
             api::settings_commands::set_commit_model,
             api::settings_commands::get_commit_lang,

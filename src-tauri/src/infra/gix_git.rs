@@ -257,4 +257,51 @@ mod tests {
             .expect("diff");
         assert!(diff.trim().is_empty(), "без изменений diff обязан быть пустым");
     }
+
+    /// Регрессия: дифф резался по 500 символам и по 500 строкам, поэтому в LLM
+    /// уходил только первый файл. Все заголовки должны попасть в результат.
+    #[test]
+    fn diff_contains_every_changed_file() {
+        let workdir = temp_workdir("many-files");
+        let gix = GixGit::new();
+        let mut names = Vec::new();
+        for i in 0..8 {
+            let name = format!("file{i}.txt");
+            std::fs::write(workdir.join(&name), format!("payload {i}\n")).expect("создать файл");
+            names.push(name);
+        }
+        let paths: Vec<String> = names.clone();
+        Git2Write.stage(&workdir, &paths).expect("stage");
+
+        let diff = gix.collect_diff(&workdir, DiffScope::Staged).expect("diff");
+        for name in &names {
+            assert!(
+                diff.contains(&format!("diff --git a/{name} b/{name}")),
+                "файл {name} обязан попасть в дифф"
+            );
+        }
+    }
+
+    /// Регрессия: удалённые файлы выкидывались фильтром
+    /// `.filter(|c| c.kind != ChangeKind::Removed)`, хотя `render_file_diff`
+    /// умеет форматировать `deleted file mode`.
+    #[test]
+    fn diff_contains_deleted_files() {
+        let workdir = temp_workdir("deleted-file");
+        let gix = GixGit::new();
+        std::fs::write(workdir.join("gone.txt"), "was here\n").expect("создать файл");
+        Git2Write
+            .stage(&workdir, &["gone.txt".to_string()])
+            .expect("stage");
+
+        std::fs::remove_file(workdir.join("gone.txt")).expect("удалить файл");
+
+        let diff = gix
+            .collect_diff(&workdir, DiffScope::Unstaged)
+            .expect("diff");
+        assert!(
+            diff.contains("diff --git a/gone.txt b/gone.txt"),
+            "удалённый файл обязан попасть в дифф, получено: {diff}"
+        );
+    }
 }

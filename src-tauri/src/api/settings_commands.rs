@@ -35,6 +35,31 @@ fn parse_scope(raw: &str) -> Result<DiffScope, String> {
     }
 }
 
+/// Счётчики для плашки генерации (файлы/символы) без запуска LLM.
+/// Токены считает плагин (`llama.countTokens`) — точный токенизатор модели.
+#[tauri::command]
+pub async fn estimate_commit_prompt(
+    services: State<'_, Services>,
+    project_path: String,
+    notes: String,
+    lang: String,
+    scope: String,
+) -> Result<usecases::CommitPromptEstimate, String> {
+    let scope = parse_scope(&scope)?;
+    let git = Arc::clone(&services.inner().git);
+    tauri::async_runtime::spawn_blocking(move || {
+        usecases::estimate_commit_prompt(
+            git.as_ref(),
+            Path::new(&project_path),
+            &notes,
+            &lang,
+            scope,
+        )
+    })
+    .await
+    .map_err(|err| format!("Ошибка фоновой задачи: {err}"))?
+}
+
 #[tauri::command]
 pub fn get_commit_model(services: State<'_, Services>) -> Option<String> {
     services.config.commit_model()

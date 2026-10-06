@@ -8,6 +8,7 @@ import {
   setPanelError,
   updatePendingUi,
 } from './statusView.js';
+import { currentScope, generateNotes, MAX_GEN_TOKENS, refreshEstimate } from './generatePanel.js';
 
 const ACTIONS = {
   stage: 'Индексация…',
@@ -48,6 +49,7 @@ export async function runAction(key, action) {
       renderStatusFor(path);
     }
     updatePendingUi();
+    void refreshEstimate();
   }
 }
 
@@ -102,15 +104,11 @@ export function onGenerate() {
   if (!path) {
     return undefined;
   }
-  const notesEl = panelEl.querySelector('#generate-notes');
-  const scopeEl = panelEl.querySelector('input[name="generate-scope"]:checked');
   const resultSlot = panelEl.querySelector('[data-slot="generate-result"]');
   const spinner = panelEl.querySelector('[data-slot="generate-spinner"]');
-  const notes = notesEl ? notesEl.value : '';
-  const scope = scopeEl ? scopeEl.value : 'staged';
-  state.commitScope = scope;
+  state.commitScope = currentScope();
   if (!state.commitModel) {
-    setPanelError('Модель не выбрана. Откройте «Настройки» и выберите модель для commit-сообщений.');
+    setPanelError('Модель не выбрана — выберите её в плашке генерации.');
     return undefined;
   }
   if (spinner) {
@@ -121,16 +119,16 @@ export function onGenerate() {
     resultSlot.textContent = '';
   }
   setPanelError('');
-  return generate(path, notes, scope, resultSlot, spinner);
+  return generate(path, resultSlot, spinner);
 }
 
-async function generate(path, notes, scope, resultSlot, spinner) {
+async function generate(path, resultSlot, spinner) {
   try {
     const lang = state.commitLang || 'ru';
     api.logFront(
-      `[generate] path=${path} lang=${lang} scope=${scope} model=${state.commitModel} notes=${notes.length} chars`,
+      `[generate] path=${path} lang=${lang} scope=${state.commitScope} model=${state.commitModel} notes=${generateNotes().length} chars`,
     );
-    const messages = await api.getCommitDiff(path, notes, lang, scope);
+    const messages = await api.getCommitDiff(path, generateNotes(), lang, state.commitScope);
     const message = await generateViaPlugin(state.commitModel, messages);
     api.logFront(`[generate] result=${message.slice(0, 120)}...`);
     if (resultSlot) {
@@ -156,7 +154,7 @@ async function generateViaPlugin(modelId, messages) {
     return llama.generateText({
       modelPath: modelId.slice('llama:'.length),
       messages,
-      maxTokens: 256,
+      maxTokens: MAX_GEN_TOKENS,
       temperature: 0.3,
     });
   }
@@ -175,7 +173,7 @@ async function generateViaPlugin(modelId, messages) {
     return cloud.chatCompletion(router, {
       model: combo,
       messages,
-      maxTokens: 256,
+      maxTokens: MAX_GEN_TOKENS,
       temperature: 0.3,
     });
   }

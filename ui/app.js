@@ -20,9 +20,7 @@ import {
   refreshPanel,
   renderStatusFor,
 } from './commitPanel.js';
-import { initSettings, refreshSettings } from './settings.js';
-
-window.__settingsRefresh = refreshSettings;
+import { refreshEstimate } from './generatePanel.js';
 
 window.addEventListener('error', (event) => {
   api.logFront(`[global-error] ${event.message} @ ${event.filename}:${event.lineno}`);
@@ -46,6 +44,9 @@ function onStatusChanged(snapshot) {
   }
   setLoading(snapshot.path, false);
   renderStatusFor(snapshot.path);
+  if (state.panelPath === snapshot.path) {
+    void refreshEstimate();
+  }
 }
 
 async function refreshStatuses() {
@@ -182,9 +183,6 @@ function onTabClick(event) {
   document.querySelectorAll('.tab-pane').forEach((pane) => {
     pane.classList.toggle('hidden', pane.id !== `tab-${tab}`);
   });
-  if (tab === 'settings') {
-    window.__settingsRefresh?.();
-  }
 }
 
 function onModalClick(event) {
@@ -221,8 +219,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     api.logFront('[focus] перечитываю статусы');
     refreshAll();
   });
-
-  initSettings();
 
   await refreshAll();
 });

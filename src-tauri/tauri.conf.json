@@ -29,9 +29,6 @@
       "log_file_name": "repos_control.log",
       "last_logs": true
     },
-    "llama-engine": {
-      "data_dir_name": "com.reposcontrol.app"
-    },
     "cloud-routers": {
       "data_dir_name": "com.reposcontrol.app"
     }

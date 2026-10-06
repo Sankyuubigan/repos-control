@@ -33,23 +33,6 @@
   <div id="tab-settings" class="tab-pane hidden">
     <div class="settings-scroll">
       <section class="settings-card">
-        <h2 class="settings-title">Модель для commit-сообщений</h2>
-        <p class="settings-hint">Выберите модель, которая будет генерировать сообщения по кнопке «Сгенерировать сообщение» в панели проекта.</p>
-        <div class="settings-model-row">
-          <select id="commit-model-select" class="settings-select"></select>
-          <button id="btn-refresh-models" class="btn btn-small">Обновить</button>
-          <span id="commit-model-hint" class="settings-model-hint"></span>
-        </div>
-        <div class="settings-model-row">
-          <label for="commit-lang-select" class="settings-hint">Язык генерации:</label>
-          <select id="commit-lang-select" class="settings-select">
-            <option value="ru">Русский</option>
-            <option value="en">Английский</option>
-          </select>
-        </div>
-        <div id="commit-model-error" class="error-banner hidden"></div>
-      </section>
-      <section class="settings-card">
         <h2 class="settings-title">Движок запуска нейромоделей</h2>
         <llama-engine-panel></llama-engine-panel>
       </section>

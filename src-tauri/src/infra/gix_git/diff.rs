@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use gix::diff::blob::unified_diff::{ConsumeBinaryHunk, ContextSize};
 use gix::diff::blob::{diff_with_slider_heuristics, Algorithm, InternedInput, UnifiedDiff};
 
@@ -11,7 +11,6 @@ use crate::domain::project::{ChangeKind, FileChange};
 
 use super::snapshot::Snapshot;
 
-const DIFF_LINE_LIMIT: usize = 500;
 const DIFF_CONTEXT: u32 = 3;
 const BINARY_SNOOP: usize = 8000;
 
@@ -33,37 +32,20 @@ pub(super) fn collect_diff(
     if blocks.is_empty() {
         return Ok(String::new());
     }
-    let joined = blocks.join("\n");
-    Ok(truncate_lines(&joined, DIFF_LINE_LIMIT))
+    Ok(blocks.join("\n"))
 }
 
 fn entries_for_scope<'a>(snap: &'a Snapshot, scope: DiffScope) -> Vec<&'a FileChange> {
     match scope {
-        DiffScope::Staged => snap
-            .staged
-            .iter()
-            .filter(|c| c.kind != ChangeKind::Removed)
-            .collect(),
+        DiffScope::Staged => snap.staged.iter().collect(),
         DiffScope::Unstaged => {
-            let mut v: Vec<&FileChange> = snap
-                .unstaged
-                .iter()
-                .filter(|c| c.kind != ChangeKind::Removed)
-                .collect();
+            let mut v: Vec<&FileChange> = snap.unstaged.iter().collect();
             v.extend(snap.untracked.iter());
             v
         }
         DiffScope::All => {
-            let mut v: Vec<&FileChange> = snap
-                .staged
-                .iter()
-                .filter(|c| c.kind != ChangeKind::Removed)
-                .collect();
-            v.extend(
-                snap.unstaged
-                    .iter()
-                    .filter(|c| c.kind != ChangeKind::Removed),
-            );
+            let mut v: Vec<&FileChange> = snap.staged.iter().collect();
+            v.extend(snap.unstaged.iter());
             v.extend(snap.untracked.iter());
             v
         }
@@ -107,14 +89,21 @@ fn read_after(repo: &gix::Repository, entry: &FileChange) -> Result<Vec<u8>> {
     if let Some(oid) = entry.new_oid {
         return Ok(read_blob(repo, oid));
     }
-    match &entry.worktree {
-        Some(path) => {
-            if path.is_dir() {
-                return Ok(Vec::new());
-            }
-            std::fs::read(path).with_context(|| format!("read worktree file {}", path.display()))
+    if entry.kind == ChangeKind::Removed {
+        return Ok(Vec::new());
+    }
+    let Some(path) = entry.worktree.as_deref() else {
+        return Ok(Vec::new());
+    };
+    match std::fs::read(path) {
+        Ok(bytes) => Ok(bytes),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            log::warn!("worktree file vanished mid-diff: {}", path.display());
+            Ok(Vec::new())
         }
-        None => Ok(Vec::new()),
+        Err(err) => {
+            Err(anyhow::Error::new(err).context(format!("read worktree file {}", path.display())))
+        }
     }
 }
 
@@ -146,45 +135,9 @@ fn looks_binary(bytes: &[u8]) -> bool {
     bytes[..limit].contains(&0)
 }
 
-fn truncate_lines(text: &str, limit: usize) -> String {
-    let lines: Vec<&str> = text.lines().collect();
-    if lines.len() <= limit {
-        return text.to_string();
-    }
-    let head = (limit * 20 / 100).max(1);
-    let tail = limit - head;
-    let omitted = lines.len() - limit;
-    let mut out = String::new();
-    for line in &lines[..head] {
-        out.push_str(line);
-        out.push('\n');
-    }
-    out.push_str(&format!("[...{omitted} lines omitted...]\n"));
-    for line in &lines[lines.len() - tail..] {
-        out.push_str(line);
-        out.push('\n');
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn truncate_keeps_head_and_tail() {
-        let text = (0..10).map(|i| format!("line{i}")).collect::<Vec<_>>().join("\n");
-        let out = truncate_lines(&text, 4);
-        assert!(out.contains("[...6 lines omitted...]"));
-        assert!(out.starts_with("line0\n"));
-        assert!(out.ends_with("line9\n") || out.ends_with("line9"));
-    }
-
-    #[test]
-    fn truncate_short_untouched() {
-        let text = "a\nb\nc";
-        assert_eq!(truncate_lines(text, 10), text);
-    }
 
     #[test]
     fn binary_detected_on_null_byte() {

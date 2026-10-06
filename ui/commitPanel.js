@@ -21,6 +21,15 @@ import {
   onStageAll,
   onUnstage,
 } from './panelActions.js';
+import {
+  loadCommitSettings,
+  onLangChange,
+  onModelChange,
+  onNotesChange,
+  onScopeChange,
+  refreshEstimate,
+  refreshModelOptions,
+} from './generatePanel.js';
 
 export { refreshPanel, renderPanelSections, renderStatusFor };
 
@@ -38,7 +47,13 @@ export async function openCommitPanel(path) {
   if (textarea) {
     textarea.value = message;
   }
+  try {
+    await loadCommitSettings();
+  } catch (err) {
+    api.logFront(`[loadCommitSettings] ${String(err)}`);
+  }
   await refreshPanel();
+  void refreshEstimate();
 }
 
 export function closeCommitPanel() {
@@ -83,14 +98,30 @@ function onPanelClick(event) {
     onPush();
   } else if (event.target.id === 'btn-panel-generate') {
     onGenerate();
+  } else if (event.target.id === 'btn-refresh-models') {
+    void refreshModelOptions();
+  }
+}
+
+function onPanelChange(event) {
+  const target = event.target;
+  if (target.id === 'commit-model-select') {
+    void onModelChange();
+  } else if (target.id === 'commit-lang-select') {
+    void onLangChange();
+  } else if (target.name === 'generate-scope') {
+    onScopeChange();
   }
 }
 
 export function bindCommitPanelHandlers() {
   panelEl.addEventListener('click', onPanelClick);
+  panelEl.addEventListener('change', onPanelChange);
   panelEl.addEventListener('input', (event) => {
     if (event.target.id === 'commit-message') {
       saveMessageSoon();
+    } else if (event.target.id === 'generate-notes') {
+      onNotesChange();
     }
   });
 }

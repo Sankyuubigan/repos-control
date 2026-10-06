@@ -46,6 +46,15 @@ export function getCommitDiff(projectPath, notes, lang, scope) {
   return invoke('get_commit_diff', { projectPath, notes, lang, scope });
 }
 
+/** Счётчики плашки генерации: { files, chars } — токены считает плагин. */
+export function estimateCommitPrompt(projectPath, notes, lang, scope) {
+  return invoke('estimate_commit_prompt', { projectPath, notes, lang, scope });
+}
+
+export function getCommitModel() {
+  return invoke('get_commit_model');
+}
+
 export function setCommitModel(model) {
   return invoke('set_commit_model', { model });
 }

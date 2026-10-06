@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
+
 use crate::domain::commit_prompt;
 use crate::domain::contracts::{CommitDraftStore, ConfigStore, DiffScope, GitApi, GitWriteApi};
 use crate::domain::project::{Project, ProjectStatus};
@@ -37,6 +39,55 @@ pub fn get_commit_diff<G: GitApi + ?Sized>(
         return Err("Нет изменений для коммита".to_string());
     }
     Ok(commit_prompt::build_messages(notes, &diff, lang, scope))
+}
+
+/// Счётчики для плашки генерации: файлы, символы и полный текст промпта.
+/// Токены считает плагин (`llama.countTokens`) — точный токенизатор модели
+/// с фоллбэком `chars/3`, когда CDN недоступен. Промпт возвращается, чтобы
+/// JS отправил его в токенизатор без дублирования шаблона.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitPromptEstimate {
+    pub files: usize,
+    pub chars: usize,
+    pub prompt: String,
+}
+
+pub fn estimate_commit_prompt<G: GitApi + ?Sized>(
+    git: &G,
+    project_path: &Path,
+    notes: &str,
+    lang: &str,
+    scope: DiffScope,
+) -> Result<CommitPromptEstimate, String> {
+    let diff = git.collect_diff(project_path, scope).map_err(|err| {
+        log::error!("collect_diff failed: {err:#}");
+        format!("Не удалось собрать diff: {err}")
+    })?;
+    if diff.trim().is_empty() {
+        return Err("Нет изменений для коммита".to_string());
+    }
+    let messages = commit_prompt::build_messages(notes, &diff, lang, scope);
+    let chars = messages.iter().map(|m| m.content.len()).sum();
+    let prompt = messages
+        .iter()
+        .map(|m| m.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    Ok(CommitPromptEstimate {
+        files: count_diff_files(&diff),
+        chars,
+        prompt,
+    })
+}
+
+/// Файлы считаются по заголовкам `diff --git a/<path> b/<path>`, которые
+/// `render_file_diff` пишет для каждой записи scope. Это единственное место,
+/// где состав диффа известен точно.
+fn count_diff_files(diff: &str) -> usize {
+    diff.lines()
+        .filter(|line| line.starts_with("diff --git a/"))
+        .count()
 }
 
 pub fn add_project<C: ConfigStore + ?Sized>(store: &C, path: &Path) -> Result<(), String> {

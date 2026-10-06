@@ -10,9 +10,6 @@ pub const INSTRUCTION_PROMPT: &str = "На основе предоставлен
 3. Опиши, что изменилось и почему.
 4. Пиши ясно и информативно.";
 
-pub const MAX_DIFF_CHARS: usize = 5000;
-pub const TRUNCATION_MARKER: &str = "[Diff truncated due to size]";
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,
@@ -20,14 +17,13 @@ pub struct ChatMessage {
 }
 
 pub fn build_messages(notes: &str, diff: &str, lang: &str, scope: DiffScope) -> Vec<ChatMessage> {
-    let truncated = truncate_diff(diff);
     let scope_label = match scope {
         DiffScope::Staged => "стейдж индекс",
         DiffScope::Unstaged => "остальные изменения",
         DiffScope::All => "все незакоммиченные изменения",
     };
     let user = format!(
-        "Заметки разработчика (игнорируй, если нерелевантно): {notes}\n\nИзменения ({scope_label}):\n{truncated}\n\nОтветь на языке: {lang}."
+        "Заметки разработчика (игнорируй, если нерелевантно): {notes}\n\nИзменения ({scope_label}):\n{diff}\n\nОтветь на языке: {lang}."
     );
     vec![
         ChatMessage {
@@ -41,28 +37,23 @@ pub fn build_messages(notes: &str, diff: &str, lang: &str, scope: DiffScope) -> 
     ]
 }
 
-fn truncate_diff(diff: &str) -> String {
-    if diff.len() <= MAX_DIFF_CHARS {
-        return diff.to_string();
-    }
-    format!("{}{TRUNCATION_MARKER}", &diff[..MAX_DIFF_CHARS])
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn truncates_long_diff() {
-        let big = "x".repeat(MAX_DIFF_CHARS + 10);
-        let out = truncate_diff(&big);
-        assert!(out.ends_with(TRUNCATION_MARKER));
-        assert!(out.starts_with(&"x".repeat(MAX_DIFF_CHARS)));
+    fn diff_is_not_truncated() {
+        let diff = "юникод ★".repeat(2000);
+        assert!(diff.len() > 5000, "фикстура должна быть длиннее прежнего лимита");
+        let messages = build_messages("", &diff, "ru", DiffScope::All);
+        assert!(messages[1].content.contains("★"));
+        assert!(!messages[1].content.contains("truncated"));
     }
 
     #[test]
-    fn short_diff_untouched() {
-        let s = "feat: ok";
-        assert_eq!(truncate_diff(s), s);
+    fn removed_files_reach_prompt() {
+        let diff = "diff --git a/gone.txt b/gone.txt\ndeleted file mode 100644";
+        let messages = build_messages("", diff, "ru", DiffScope::All);
+        assert!(messages[1].content.contains("deleted file mode"));
     }
 }

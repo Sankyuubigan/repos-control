@@ -88,6 +88,27 @@ export function renderPanelSections() {
   );
   slot.innerHTML = `${staged}${unstaged}`;
   updateActionButtons(st);
+  renderScopeCounts();
+}
+
+/**
+ * Счётчики файлов у переключателей области. Обновляются на каждомstatusе,
+ * поэтому плашка не перерисовывается целиком (иначе потерялись бы текст
+ * заметок и выбранная модель).
+ */
+function renderScopeCounts() {
+  const st = panel();
+  const counts = {
+    'count-staged': (st.stagedFiles || []).length,
+    'count-unstaged': (st.unstagedFiles || []).length,
+    'count-all': (st.changedFiles || []).length,
+  };
+  for (const [slot, value] of Object.entries(counts)) {
+    const el = panelEl.querySelector(`[data-slot="${slot}"]`);
+    if (el) {
+      el.textContent = String(value);
+    }
+  }
 }
 
 /**
@@ -181,12 +202,23 @@ function renderPanelBody() {
         <span class="generate-panel-title">Генерация сообщения</span>
         <span class="generate-spinner hidden" data-slot="generate-spinner"></span>
       </div>
+      <div class="generate-model-row">
+        <select id="commit-model-select" class="generate-select" title="Модель для генерации"></select>
+        <button id="btn-refresh-models" class="btn btn-tiny" title="Обновить список моделей">↻</button>
+        <select id="commit-lang-select" class="generate-select generate-select-lang" title="Язык сообщения">
+          <option value="ru">RU</option>
+          <option value="en">EN</option>
+        </select>
+      </div>
+      <div id="commit-model-hint" class="generate-hint"></div>
+      <div id="commit-model-error" class="error-banner hidden"></div>
       <textarea id="generate-notes" rows="2" placeholder="Заметки разработчика (необязательно)…"></textarea>
       <div class="generate-scope">
-        <label><input type="radio" name="generate-scope" value="staged" ${state.commitScope === 'staged' ? 'checked' : ''}> Стейдж индекс</label>
-        <label><input type="radio" name="generate-scope" value="unstaged" ${state.commitScope === 'unstaged' ? 'checked' : ''}> Остальные изменения</label>
-        <label><input type="radio" name="generate-scope" value="all" ${state.commitScope === 'all' ? 'checked' : ''}> Все незакоммиченные</label>
+        <label><input type="radio" name="generate-scope" value="staged" ${state.commitScope === 'staged' ? 'checked' : ''}> Стейдж (<span data-slot="count-staged">0</span>)</label>
+        <label><input type="radio" name="generate-scope" value="unstaged" ${state.commitScope === 'unstaged' ? 'checked' : ''}> Остальные (<span data-slot="count-unstaged">0</span>)</label>
+        <label><input type="radio" name="generate-scope" value="all" ${state.commitScope === 'all' ? 'checked' : ''}> Все (<span data-slot="count-all">0</span>)</label>
       </div>
+      <div class="generate-tokens-info" data-slot="generate-tokens-info">Считаю объём промпта…</div>
       <button id="btn-panel-generate" class="btn">Сгенерировать сообщение</button>
       <div class="generate-result hidden" data-slot="generate-result"></div>
     </div>
