@@ -9,3 +9,4 @@ src-tauri/Cargo.lock
 /tasks
 /test
 /src-tauri/gen
+/temp

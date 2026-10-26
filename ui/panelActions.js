@@ -9,6 +9,7 @@ import {
   updatePendingUi,
 } from './statusView.js';
 import { currentScope, generateNotes, MAX_GEN_TOKENS, refreshEstimate } from './generatePanel.js';
+import { loadCommitHistory } from './historyPanel.js';
 
 const ACTIONS = {
   stage: 'Индексация…',
@@ -47,6 +48,9 @@ export async function runAction(key, action) {
       await refreshPanel();
     } else {
       renderStatusFor(path);
+      if (key === 'commit') {
+        void loadCommitHistory();
+      }
     }
     updatePendingUi();
     void refreshEstimate();

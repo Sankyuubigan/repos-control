@@ -65,6 +65,7 @@ pub fn run() {
             api::commands::remove_project,
             api::commands::reorder_projects,
             api::commands::get_project_status,
+            api::commands::list_commits,
             api::settings_commands::get_commit_diff,
             api::settings_commands::estimate_commit_prompt,
             api::settings_commands::get_commit_model,

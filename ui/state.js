@@ -13,6 +13,8 @@ export const state = {
   panelPath: null,
   panelMessage: '',
   panelSaveTimer: null,
+  // Сколько коммитов истории сейчас запрошено у бэкенда (растёт по «Показать ещё»).
+  panelHistoryLimit: 20,
   commitModel: '',
   commitLang: 'ru',
   commitScope: 'staged',

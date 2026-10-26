@@ -31,6 +31,17 @@ pub struct ChangedFile {
     pub status: String,
 }
 
+/// Одна строка истории коммитов для плашки в панели. `time` — unix-секунды
+/// времени коммиттера; UI форматирует их в локальную дату сам.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitEntry {
+    pub short_id: String,
+    pub message: String,
+    pub time: i64,
+    pub is_head: bool,
+}
+
 impl Default for ProjectStatus {
     fn default() -> Self {
         Self {

@@ -6,14 +6,16 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use crate::domain::contracts::{DiffScope, GitApi};
-use crate::domain::project::{ChangedFile, ProjectStatus};
+use crate::domain::project::{ChangedFile, CommitEntry, ProjectStatus};
 
 mod ahead_behind;
 mod diff;
+mod history;
 mod snapshot;
 
 const STATUS_TIMEOUT: Duration = Duration::from_secs(25);
 const DIFF_TIMEOUT: Duration = Duration::from_secs(20);
+const HISTORY_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Читатель состояния репозитория на библиотеке `gix`.
 ///
@@ -177,6 +179,26 @@ impl GitApi for GixGit {
                 started.elapsed().as_secs_f64()
             ),
             Err(err) => log::error!("diff {} не удался: {err:#}", project_path.display()),
+        }
+        result
+    }
+
+    fn list_commits(&self, project_path: &Path, limit: usize) -> Result<Vec<CommitEntry>> {
+        let started = Instant::now();
+        let guard = DeadlineGuard::start("history", HISTORY_TIMEOUT);
+        let result = (|| {
+            let repo = snapshot::open_repo(project_path)?;
+            history::list(&repo, limit, guard.interrupt(), guard.deadline())
+        })();
+        guard.finish();
+        match &result {
+            Ok(entries) => log::info!(
+                "history {}: {} коммитов за {:.1}с",
+                project_path.display(),
+                entries.len(),
+                started.elapsed().as_secs_f64()
+            ),
+            Err(err) => log::error!("history {} не удался: {err:#}", project_path.display()),
         }
         result
     }

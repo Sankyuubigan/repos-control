@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
 use crate::domain::contracts::{CommitDraftStore, ConfigStore, GitApi, GitWriteApi};
-use crate::domain::project::Project;
+use crate::domain::project::{CommitEntry, Project};
 use crate::domain::usecases;
 use crate::infra::{
     FileCommitDraftStore, FileConfigStore, Git2Write, GixGit, StatusHub, StatusSnapshot,
@@ -93,6 +93,21 @@ pub async fn get_project_status(
     project_path: String,
 ) -> Result<StatusSnapshot, String> {
     services.status.read(Path::new(&project_path)).await
+}
+
+/// Последние коммиты репозитория для плашки «История коммитов».
+#[tauri::command]
+pub async fn list_commits(
+    services: State<'_, Services>,
+    project_path: String,
+    limit: usize,
+) -> Result<Vec<CommitEntry>, String> {
+    let git = Arc::clone(&services.inner().git);
+    tauri::async_runtime::spawn_blocking(move || {
+        usecases::list_commits(git.as_ref(), Path::new(&project_path), limit)
+    })
+    .await
+    .map_err(|err| format!("Ошибка фоновой задачи: {err}"))?
 }
 
 #[tauri::command]

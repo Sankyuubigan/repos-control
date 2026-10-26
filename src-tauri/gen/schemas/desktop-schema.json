@@ -219,10 +219,10 @@
           "markdownDescription": "Allow installing/updating cloud routers (portable node.exe + npm bundle)."
         },
         {
-          "description": "Allow opening the cloud router web dashboard in the default browser.",
+          "description": "Allow requesting the cloud router web dashboard (the host shows it as an in-app tab).",
           "type": "string",
           "const": "cloud-routers:allow-open-dashboard",
-          "markdownDescription": "Allow opening the cloud router web dashboard in the default browser."
+          "markdownDescription": "Allow requesting the cloud router web dashboard (the host shows it as an in-app tab)."
         },
         {
           "description": "Allow setting the cloud router API key.",

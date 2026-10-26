@@ -4,7 +4,23 @@ use serde::Serialize;
 
 use crate::domain::commit_prompt;
 use crate::domain::contracts::{CommitDraftStore, ConfigStore, DiffScope, GitApi, GitWriteApi};
-use crate::domain::project::{Project, ProjectStatus};
+use crate::domain::project::{CommitEntry, Project, ProjectStatus};
+
+/// Потолок глубины истории для плашки: защищает бэкенд от прохода по всей
+/// истории огромного репозитория, сколько бы UI ни попросил.
+pub const MAX_HISTORY_LIMIT: usize = 500;
+
+pub fn list_commits<G: GitApi + ?Sized>(
+    git: &G,
+    project_path: &Path,
+    limit: usize,
+) -> Result<Vec<CommitEntry>, String> {
+    let limit = limit.clamp(1, MAX_HISTORY_LIMIT);
+    git.list_commits(project_path, limit).map_err(|err| {
+        log::error!("list_commits failed for {}: {err:#}", project_path.display());
+        format!("Не удалось прочитать историю коммитов: {err}")
+    })
+}
 
 pub fn list_projects<C: ConfigStore + ?Sized>(store: &C) -> Vec<Project> {
     store.list_projects()

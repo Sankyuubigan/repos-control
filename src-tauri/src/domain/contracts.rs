@@ -13,7 +13,7 @@ pub trait CommitDraftStore: Send + Sync {
     fn clear_draft(&self, project_path: &Path) -> Result<(), anyhow::Error>;
 }
 
-use crate::domain::project::{Project, ProjectStatus};
+use crate::domain::project::{CommitEntry, Project, ProjectStatus};
 
 pub trait ConfigStore: Send + Sync {
     fn list_projects(&self) -> Vec<Project>;
@@ -29,6 +29,11 @@ pub trait ConfigStore: Send + Sync {
 pub trait GitApi: Send + Sync {
     fn status(&self, project_path: &Path) -> Result<ProjectStatus, anyhow::Error>;
     fn collect_diff(&self, project_path: &Path, scope: DiffScope) -> Result<String, anyhow::Error>;
+    fn list_commits(
+        &self,
+        project_path: &Path,
+        limit: usize,
+    ) -> Result<Vec<CommitEntry>, anyhow::Error>;
 }
 
 pub trait GitWriteApi: Send + Sync {

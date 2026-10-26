@@ -42,6 +42,11 @@ export function getProjectStatus(projectPath) {
   );
 }
 
+/** История коммитов: `[{shortId, message, time, isHead}]`, новейшие сверху. */
+export function listCommits(projectPath, limit) {
+  return invoke('list_commits', { projectPath, limit });
+}
+
 export function getCommitDiff(projectPath, notes, lang, scope) {
   return invoke('get_commit_diff', { projectPath, notes, lang, scope });
 }

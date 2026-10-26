@@ -30,6 +30,7 @@ import {
   refreshEstimate,
   refreshModelOptions,
 } from './generatePanel.js';
+import { loadCommitHistory, showMoreCommits } from './historyPanel.js';
 
 export { refreshPanel, renderPanelSections, renderStatusFor };
 
@@ -54,6 +55,7 @@ export async function openCommitPanel(path) {
   }
   await refreshPanel();
   void refreshEstimate();
+  void loadCommitHistory(true);
 }
 
 export function closeCommitPanel() {
@@ -74,6 +76,10 @@ function onPanelClick(event) {
       case 'panel-refresh':
         setPanelError('');
         refreshPanel();
+        void loadCommitHistory();
+        return;
+      case 'history-more':
+        showMoreCommits();
         return;
       case 'stage':
         onStage(btn.dataset.path);

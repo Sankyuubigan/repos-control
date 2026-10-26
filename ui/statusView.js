@@ -222,6 +222,15 @@ function renderPanelBody() {
       <button id="btn-panel-generate" class="btn">Сгенерировать сообщение</button>
       <div class="generate-result hidden" data-slot="generate-result"></div>
     </div>
+    <div class="history-panel">
+      <div class="history-head">
+        <span class="history-title">История коммитов</span>
+        <span class="panel-count" data-slot="history-count"></span>
+      </div>
+      <div class="history-list" data-slot="history-list">
+        <div class="history-empty">Загрузка истории…</div>
+      </div>
+    </div>
   </div>`;
 }
 
