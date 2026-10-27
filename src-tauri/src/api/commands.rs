@@ -8,7 +8,7 @@ use crate::domain::project::{CommitEntry, Project};
 use crate::domain::usecases;
 use crate::infra::{
     FileCommitDraftStore, FileConfigStore, Git2Write, GixGit, StatusHub, StatusSnapshot,
-    WatcherManager, WriteRegistry,
+    WatcherManager, WriteRegistry, gitignore,
 };
 
 pub struct Services {
@@ -230,6 +230,40 @@ pub async fn push_changes(
         move |git, path| usecases::push_changes(git, path),
     )
     .await
+}
+
+#[tauri::command]
+pub async fn add_to_gitignore(
+    services: State<'_, Services>,
+    project_path: String,
+    file_path: String,
+) -> Result<StatusSnapshot, String> {
+    let inner = services.inner();
+    let write_git = Arc::clone(&inner.write_git);
+    run_write(
+        Arc::clone(&inner.status),
+        Arc::clone(&inner.writes),
+        write_git,
+        project_path,
+        move |git, path| usecases::add_to_gitignore(git, path, &file_path),
+    )
+    .await
+}
+
+/// Открывает .gitignore проекта в Блокноте (создаёт пустой файл при
+/// отсутствии). Появление файла подхватит fs-watcher и обновит статус.
+#[tauri::command]
+pub async fn open_gitignore(project_path: String) -> Result<(), String> {
+    let path_for_log = project_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        gitignore::open_in_notepad(Path::new(&project_path))
+    })
+    .await
+    .map_err(|err| format!("Ошибка фоновой задачи: {err}"))?
+    .map_err(|err| {
+        log::error!("open_gitignore for {path_for_log}: {err:#}");
+        format!("Не удалось открыть .gitignore в блокноте: {err:#}")
+    })
 }
 
 #[tauri::command]

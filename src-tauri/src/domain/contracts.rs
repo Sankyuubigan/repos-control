@@ -42,4 +42,6 @@ pub trait GitWriteApi: Send + Sync {
     fn discard(&self, project_path: &Path, paths: &[String]) -> Result<(), anyhow::Error>;
     fn commit(&self, project_path: &Path, message: &str) -> Result<(), anyhow::Error>;
     fn push(&self, project_path: &Path) -> Result<(), anyhow::Error>;
+    /// Добавляет файл в .gitignore репозитория (файл создаётся при отсутствии).
+    fn add_to_gitignore(&self, project_path: &Path, entry: &str) -> Result<(), anyhow::Error>;
 }

@@ -18,6 +18,7 @@ const ACTIONS = {
   discard: 'Откат…',
   commit: 'Коммит…',
   push: 'Push…',
+  gitignore: 'Добавление в .gitignore…',
 };
 
 /**
@@ -101,6 +102,27 @@ export function onCommit() {
 
 export function onPush() {
   return runAction('push', (path) => api.pushChanges(path));
+}
+
+/**
+ * Кнопка «Открыть .gitignore»: быстрая ОС-операция без git-записи, крутилка
+ * не нужна. Ошибка — в баннер панели и лог.
+ */
+export function onOpenGitignore() {
+  const path = state.panelPath;
+  if (!path) {
+    return undefined;
+  }
+  setPanelError('');
+  return api.openGitignore(path).catch((err) => {
+    setPanelError(String(err));
+    api.logFront(`[open-gitignore] ${String(err)}`);
+  });
+}
+
+/** Пункт контекстного меню «Добавить в .gitignore»: ответ содержит свежий статус. */
+export function onAddToGitignore(filePath) {
+  return runAction('gitignore', (path) => api.addToGitignore(path, filePath));
 }
 
 export function onGenerate() {

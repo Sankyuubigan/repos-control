@@ -2,6 +2,7 @@ pub mod commit_draft_store;
 pub mod config_store;
 pub mod fs_watcher;
 pub mod git2_write;
+pub mod gitignore;
 pub mod gix_git;
 pub mod status_hub;
 pub mod write_registry;

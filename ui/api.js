@@ -97,6 +97,16 @@ export function pushChanges(projectPath) {
   return invoke('push_changes', { projectPath });
 }
 
+/** Открывает .gitignore проекта в Блокноте (создаёт файл при отсутствии). */
+export function openGitignore(projectPath) {
+  return invoke('open_gitignore', { projectPath });
+}
+
+/** Ответ — свежий статус: файл уже исключён из untracked-списка. */
+export function addToGitignore(projectPath, filePath) {
+  return invoke('add_to_gitignore', { projectPath, filePath });
+}
+
 export function readCommitMessage(projectPath) {
   return invoke('read_commit_message', { projectPath });
 }

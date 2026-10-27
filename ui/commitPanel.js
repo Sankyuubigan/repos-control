@@ -13,9 +13,11 @@ import {
   showPanel,
 } from './statusView.js';
 import {
+  onAddToGitignore,
   onCommit,
   onDiscard,
   onGenerate,
+  onOpenGitignore,
   onPush,
   onStage,
   onStageAll,
@@ -31,6 +33,7 @@ import {
   refreshModelOptions,
 } from './generatePanel.js';
 import { loadCommitHistory, showMoreCommits } from './historyPanel.js';
+import { openContextMenu } from './contextMenu.js';
 
 export { refreshPanel, renderPanelSections, renderStatusFor };
 
@@ -93,6 +96,9 @@ function onPanelClick(event) {
       case 'discard':
         onDiscard(btn.dataset.path);
         return;
+      case 'open-gitignore':
+        onOpenGitignore();
+        return;
     }
   }
   if (!state.panelPath) {
@@ -109,6 +115,25 @@ function onPanelClick(event) {
   }
 }
 
+/**
+ * ПКМ на строке файла (стейдж или изменения) — кастомное меню вместо
+ * системного. Путь берём из data-path строки, который проставляет fileRow.
+ */
+function onPanelContextMenu(event) {
+  const row = event.target.closest('.panel-file-row');
+  if (!row || !state.panelPath) {
+    return;
+  }
+  const filePath = row.dataset.path;
+  if (!filePath) {
+    return;
+  }
+  event.preventDefault();
+  openContextMenu(event.clientX, event.clientY, [
+    { label: 'Добавить в .gitignore', onSelect: () => onAddToGitignore(filePath) },
+  ]);
+}
+
 function onPanelChange(event) {
   const target = event.target;
   if (target.id === 'commit-model-select') {
@@ -122,6 +147,7 @@ function onPanelChange(event) {
 
 export function bindCommitPanelHandlers() {
   panelEl.addEventListener('click', onPanelClick);
+  panelEl.addEventListener('contextmenu', onPanelContextMenu);
   panelEl.addEventListener('change', onPanelChange);
   panelEl.addEventListener('input', (event) => {
     if (event.target.id === 'commit-message') {

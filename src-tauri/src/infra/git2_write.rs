@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 
 use crate::domain::contracts::GitWriteApi;
+use crate::infra::gitignore;
 
 pub struct Git2Write;
 
@@ -128,6 +129,10 @@ impl GitWriteApi for Git2Write {
             .with_context(|| format!("push ветки {branch} в origin"))?;
         log::info!("push {branch} -> origin в {}", project_path.display());
         Ok(())
+    }
+
+    fn add_to_gitignore(&self, project_path: &Path, entry: &str) -> Result<()> {
+        gitignore::add_entry(project_path, entry)
     }
 }
 

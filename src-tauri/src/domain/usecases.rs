@@ -191,6 +191,15 @@ pub fn push_changes<W: GitWriteApi + ?Sized>(
         .map_err(|err| write_error("Не удалось выполнить push", project_path, err))
 }
 
+pub fn add_to_gitignore<W: GitWriteApi + ?Sized>(
+    git: &W,
+    project_path: &Path,
+    file_path: &str,
+) -> Result<(), String> {
+    git.add_to_gitignore(project_path, file_path)
+        .map_err(|err| write_error("Не удалось добавить в .gitignore", project_path, err))
+}
+
 pub fn read_commit_message<D: CommitDraftStore + ?Sized>(
     drafts: &D,
     project_path: &Path,

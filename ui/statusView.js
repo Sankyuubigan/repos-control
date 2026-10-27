@@ -29,7 +29,7 @@ export function panel() {
 export function fileRow(file, actionHtml) {
   const s = String(file.status).toUpperCase();
   const deleted = s === 'D' ? ' is-deleted' : '';
-  return `<div class="panel-file-row">
+  return `<div class="panel-file-row" data-path="${esc(file.path)}">
     ${fileIconHtml(file.path)}
     <span class="file-path-item${deleted}" title="${esc(file.path)}">${esc(file.path)}</span>
     <span class="file-status file-status-${esc(s)}">${esc(s)}</span>
@@ -182,6 +182,7 @@ function renderPanelHead() {
       </div>
     </div>
     <button class="btn btn-primary btn-small" data-action="panel-refresh">Обновить</button>
+    <button class="btn btn-small" data-action="open-gitignore" title="Открыть .gitignore репозитория в блокноте">Открыть .gitignore</button>
   </div>`;
 }
 
