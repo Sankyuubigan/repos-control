@@ -191,6 +191,9 @@ function renderPanelBody() {
     <div data-slot="panel-sections"></div>
     <div class="panel-commit">
       <textarea id="commit-message" rows="4" placeholder="Сообщение коммита…">${esc(state.panelMessage)}</textarea>
+      <div class="panel-commit-tools">
+        <button class="btn btn-small" data-action="commit-backup-stamp" title="Добавить строку вида backup: 2026-03-08 18:12:49">Добавить backup-метку</button>
+      </div>
       <div class="panel-actions">
         <span class="panel-hint">Черновик сохраняется автоматически</span>
         <button id="btn-panel-commit" class="btn btn-primary">Коммит</button>

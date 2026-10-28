@@ -279,6 +279,12 @@ body {
 
 .panel-commit textarea:focus { outline: none; border-color: var(--accent); }
 
+.panel-commit-tools {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .panel-actions {
   display: flex;
   align-items: center;

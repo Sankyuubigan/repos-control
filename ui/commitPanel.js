@@ -99,6 +99,9 @@ function onPanelClick(event) {
       case 'open-gitignore':
         onOpenGitignore();
         return;
+      case 'commit-backup-stamp':
+        insertBackupStamp();
+        return;
     }
   }
   if (!state.panelPath) {
@@ -113,6 +116,30 @@ function onPanelClick(event) {
   } else if (event.target.id === 'btn-refresh-models') {
     void refreshModelOptions();
   }
+}
+
+/** Локальное время в формате «ГГГГ-ММ-ДД ЧЧ:ММ:СС». */
+function formatLocalStamp() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    ` ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
+}
+
+/** Добавляет в поле сообщения строку «backup: ГГГГ-ММ-ДД ЧЧ:ММ:СС». */
+function insertBackupStamp() {
+  const textarea = panelEl.querySelector('#commit-message');
+  if (!textarea) {
+    return;
+  }
+  const current = textarea.value.replace(/\s+$/, '');
+  const stamp = `backup: ${formatLocalStamp()}`;
+  textarea.value = current ? `${current}\n${stamp}` : stamp;
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  saveMessageSoon();
 }
 
 /**
