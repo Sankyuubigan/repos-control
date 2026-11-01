@@ -22,6 +22,7 @@ import {
   onStage,
   onStageAll,
   onUnstage,
+  onUnstageAll,
 } from './panelActions.js';
 import {
   loadCommitSettings,
@@ -92,6 +93,9 @@ function onPanelClick(event) {
         return;
       case 'unstage':
         onUnstage(btn.dataset.path);
+        return;
+      case 'unstage-all':
+        onUnstageAll();
         return;
       case 'discard':
         onDiscard(btn.dataset.path);

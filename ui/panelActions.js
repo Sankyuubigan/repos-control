@@ -15,6 +15,7 @@ const ACTIONS = {
   stage: 'Индексация…',
   'stage-all': 'Индексация…',
   unstage: 'Снятие с индекса…',
+  'unstage-all': 'Снятие с индекса…',
   discard: 'Откат…',
   commit: 'Коммит…',
   push: 'Push…',
@@ -79,6 +80,14 @@ export function onStageAll() {
 
 export function onUnstage(filePath) {
   return runAction('unstage', (path) => api.unstageFiles(path, [filePath]));
+}
+
+export function onUnstageAll() {
+  const paths = (panel().stagedFiles ?? []).map((f) => f.path);
+  if (paths.length === 0) {
+    return undefined;
+  }
+  return runAction('unstage-all', (path) => api.unstageFiles(path, paths));
 }
 
 export function onCommit() {

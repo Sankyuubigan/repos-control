@@ -29,7 +29,17 @@ impl GitWriteApi for Git2Write {
             return Ok(());
         }
         let repo = open_repo(project_path)?;
-        repo.reset_default(None, paths.iter().cloned())
+        // База отката — HEAD. libgit2 reset_default(None) диффает индекс против
+        // ПУСТОГО дерева: снимались с индекса только новые файлы, staged-изменения
+        // превращались в «удалён + untracked», а staged-удаления зависали в индексе.
+        let head = match repo.head() {
+            Ok(head) => head.peel_to_commit().ok().map(|c| c.into_object()),
+            Err(err) => {
+                log::debug!("unstage: HEAD недоступен ({err:#}), откат индекса к пустому дереву");
+                None
+            }
+        };
+        repo.reset_default(head.as_ref(), paths.iter().cloned())
             .context("снять файлы с индекса (reset)")?;
         log::info!("unstage: {} файл(ов) в {}", paths.len(), project_path.display());
         Ok(())
@@ -280,6 +290,84 @@ mod tests {
         let status = repo.status_file(Path::new("a.txt")).expect("status");
         assert!(status.contains(git2::Status::WT_NEW));
         assert!(!status.contains(git2::Status::INDEX_NEW));
+    }
+
+    #[test]
+    fn unstage_restores_staged_deletion_file_absent() {
+        let tmp = TempRepo::new();
+        let repo = tmp.repo();
+        fs::create_dir_all(tmp.path.join("dir")).expect("create dir");
+        tmp.write("dir/nested.txt", "hello");
+        let write = Git2Write;
+        write.stage(&tmp.path, &paths(&["dir/nested.txt"])).expect("stage");
+        write.commit(&tmp.path, "init").expect("commit");
+
+        fs::remove_file(tmp.path.join("dir/nested.txt")).expect("remove file");
+        write.stage(&tmp.path, &paths(&["dir/nested.txt"])).expect("stage deletion");
+        let status = repo.status_file(Path::new("dir/nested.txt")).expect("status");
+        assert!(status.contains(git2::Status::INDEX_DELETED), "статус: {:?}", status);
+
+        write.unstage(&tmp.path, &paths(&["dir/nested.txt"])).expect("unstage");
+        let status = repo.status_file(Path::new("dir/nested.txt")).expect("status");
+        assert!(
+            !status.contains(git2::Status::INDEX_DELETED),
+            "staged-удаление должно уйти после unstage, статус: {:?}",
+            status
+        );
+        assert!(
+            status.contains(git2::Status::WT_DELETED),
+            "файла на диске нет: запись HEAD должна вернуться в индекс, статус: {:?}",
+            status
+        );
+    }
+
+    #[test]
+    fn unstage_clears_staged_deletion_of_recreated_file() {
+        let tmp = TempRepo::new();
+        let repo = tmp.repo();
+        fs::create_dir_all(tmp.path.join("dir")).expect("create dir");
+        tmp.write("dir/nested.txt", "hello");
+        let write = Git2Write;
+        write.stage(&tmp.path, &paths(&["dir/nested.txt"])).expect("stage");
+        write.commit(&tmp.path, "init").expect("commit");
+
+        // Реальное состояние из баг-репорта: удаление застейджено, файл снова на диске
+        // (висит как «D» в индексе + «??» в worktree).
+        fs::remove_file(tmp.path.join("dir/nested.txt")).expect("remove file");
+        write.stage(&tmp.path, &paths(&["dir/nested.txt"])).expect("stage deletion");
+        tmp.write("dir/nested.txt", "hello");
+        let status = repo.status_file(Path::new("dir/nested.txt")).expect("status");
+        assert!(
+            status.contains(git2::Status::INDEX_DELETED),
+            "до unstage удаление должно быть в индексе, статус: {:?}",
+            status
+        );
+
+        write.unstage(&tmp.path, &paths(&["dir/nested.txt"])).expect("unstage");
+        let status = repo.status_file(Path::new("dir/nested.txt")).expect("status");
+        assert!(
+            !status.contains(git2::Status::INDEX_DELETED),
+            "после unstage staged-удаление должно уйти, статус: {:?}",
+            status
+        );
+    }
+
+    #[test]
+    fn unstage_staged_modified_becomes_wt_modified() {
+        let tmp = TempRepo::new();
+        let repo = tmp.repo();
+        tmp.write("a.txt", "hello");
+        let write = Git2Write;
+        write.stage(&tmp.path, &paths(&["a.txt"])).expect("stage");
+        write.commit(&tmp.path, "init").expect("commit");
+
+        tmp.write("a.txt", "changed");
+        write.stage(&tmp.path, &paths(&["a.txt"])).expect("stage modification");
+
+        write.unstage(&tmp.path, &paths(&["a.txt"])).expect("unstage");
+        let status = repo.status_file(Path::new("a.txt")).expect("status");
+        assert!(status.contains(git2::Status::WT_MODIFIED), "статус: {:?}", status);
+        assert!(!status.contains(git2::Status::INDEX_MODIFIED), "статус: {:?}", status);
     }
 
     #[test]

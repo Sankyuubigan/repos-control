@@ -59,6 +59,11 @@ function unstageButton(path) {
   return `<button class="btn btn-tiny" data-action="unstage" data-path="${esc(path)}" title="Снять с индекса">−</button>`;
 }
 
+function unstageAllButton(files) {
+  const disabled = files.length === 0 ? ' disabled' : '';
+  return `<button class="btn btn-tiny" data-action="unstage-all" title="Снять все файлы с индекса"${disabled}>−</button>`;
+}
+
 function discardButton(path) {
   return `<button class="btn btn-tiny btn-danger" data-action="discard" data-path="${esc(path)}" title="Откатить изменения">↺</button>`;
 }
@@ -79,7 +84,7 @@ export function renderPanelSections() {
     updateActionButtons(st);
     return;
   }
-  const staged = section('Стейдж индекс', st.stagedFiles, unstageButton);
+  const staged = section('Стейдж индекс', st.stagedFiles, unstageButton, unstageAllButton(st.stagedFiles));
   const unstaged = section(
     'Изменения',
     st.unstagedFiles,
