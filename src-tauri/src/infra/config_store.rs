@@ -37,7 +37,7 @@ impl FileConfigStore {
             fs::create_dir_all(parent)
                 .with_context(|| format!("create {}", parent.display()))?;
         }
-        ko_json_store::update_json(&self.path, |root: &mut serde_json::Value| {
+        json_store::update_json(&self.path, |root: &mut serde_json::Value| {
             if !root.is_object() {
                 *root = serde_json::json!({});
             }
