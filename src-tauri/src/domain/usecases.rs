@@ -225,3 +225,77 @@ pub fn write_commit_message<D: CommitDraftStore + ?Sized>(
         .write_draft(project_path, message)
         .map_err(|err| write_error("Не удалось сохранить черновик", project_path, err))
 }
+
+/// Исход массового бэкап-пуша одного проекта.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum PushAllOutcome {
+    Pushed,
+    NothingToPush,
+    NotRepo,
+    Error,
+}
+
+/// Пункт отчёта массового пуша: что решено и почему. Путь приходит в соседнем
+/// поле снапшота (`PushAllReportEntry`), здесь не дублируется.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PushAllItem {
+    pub branch: Option<String>,
+    pub ahead_before: u32,
+    pub outcome: PushAllOutcome,
+    pub message: String,
+}
+
+/// Решение «пушить ли проект» по уже прочитанному статусу и сам push.
+/// Статус читает вызывающий (StatusHub — единственная точка чтения), ошибки
+/// записи не выбрасываются наружу: каждый исход — пункт отчёта и строка лога.
+pub fn backup_push<W: GitWriteApi + ?Sized>(
+    status: &ProjectStatus,
+    write_git: &W,
+    project_path: &Path,
+) -> PushAllItem {
+    let mut item = PushAllItem {
+        branch: status.branch.clone(),
+        ahead_before: 0,
+        outcome: PushAllOutcome::NothingToPush,
+        message: String::new(),
+    };
+    if let Some(err) = &status.error {
+        log::error!("backup_push: status failed for {}: {err}", project_path.display());
+        item.outcome = PushAllOutcome::Error;
+        item.message = format!("Не удалось прочитать статус: {err}");
+        return item;
+    }
+    if !status.is_repo {
+        log::info!("backup_push {}: не git-репозиторий, пропуск", project_path.display());
+        item.outcome = PushAllOutcome::NotRepo;
+        item.message = "Не git-репозиторий".to_string();
+        return item;
+    }
+    item.ahead_before = status.ahead;
+    if status.ahead == 0 {
+        log::info!("backup_push {}: нет ahead-коммитов, пропуск", project_path.display());
+        item.outcome = PushAllOutcome::NothingToPush;
+        item.message = "Нет ahead-коммитов".to_string();
+        return item;
+    }
+    match write_git.push(project_path) {
+        Ok(()) => {
+            log::info!(
+                "backup_push {}: запушено {} коммитов ветки {}",
+                project_path.display(),
+                status.ahead,
+                status.branch.as_deref().unwrap_or("?")
+            );
+            item.outcome = PushAllOutcome::Pushed;
+            item.message = "Отправлено в origin".to_string();
+        }
+        Err(err) => {
+            log::error!("backup_push: push failed for {}: {err:#}", project_path.display());
+            item.outcome = PushAllOutcome::Error;
+            item.message = format!("push: {err:#}");
+        }
+    }
+    item
+}

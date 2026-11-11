@@ -97,6 +97,11 @@ export function pushChanges(projectPath) {
   return invoke('push_changes', { projectPath });
 }
 
+/** Массовый бэкап-пуш: по каждому проекту — решение домена + свежий статус. */
+export function pushAllChanges() {
+  return invoke('push_all_changes');
+}
+
 /** Открывает .gitignore проекта в Блокноте (создаёт файл при отсутствии). */
 export function openGitignore(projectPath) {
   return invoke('open_gitignore', { projectPath });

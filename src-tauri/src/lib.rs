@@ -78,6 +78,7 @@ pub fn run() {
             api::commands::discard_files,
             api::commands::commit_changes,
             api::commands::push_changes,
+            api::commands::push_all_changes,
             api::commands::add_to_gitignore,
             api::commands::open_gitignore,
             api::commands::read_commit_message,

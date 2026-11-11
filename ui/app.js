@@ -13,6 +13,7 @@ import {
   renderStatusBar,
   showModal,
   hideModal,
+  projectName,
 } from './render.js';
 import {
   bindCommitPanelHandlers,
@@ -164,10 +165,61 @@ function onTopBarClick(event) {
     case 'btn-refresh':
       refreshAll();
       break;
+    case 'btn-push-all':
+      onPushAll();
+      break;
     case 'btn-add':
       onAddProject();
       break;
   }
+}
+
+const PUSH_ALL_LABEL = 'Пуш всех';
+
+/**
+ * Массовый бэкап-пуш: на время операции на месте кнопки — крутилка. Каждый
+ * пункт отчёта несёт свежий статус, поэтому бейджи обновляются сразу, а итог
+ * показывается модалом. Ошибки конкретных проектов приходят внутри пунктов
+ * отчёта (и уже залогированы на бэкенде), падение самой команды — отдельно.
+ */
+async function onPushAll() {
+  const btn = document.getElementById('btn-push-all');
+  if (!btn || btn.disabled) {
+    return;
+  }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="card-spinner"></span>';
+  try {
+    const report = await api.pushAllChanges();
+    for (const entry of report) {
+      applySnapshot(entry.snapshot);
+      renderStatusFor(entry.snapshot.path);
+    }
+    showModal('Пуш всех', buildPushAllSummary(report));
+  } catch (err) {
+    api.logFront(`[pushAllChanges] ${String(err)}`);
+    showModal('Ошибка пуша', String(err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = PUSH_ALL_LABEL;
+  }
+}
+
+function buildPushAllSummary(report) {
+  const lines = report.map((entry) => {
+    const name = projectName(entry.snapshot.path);
+    switch (entry.item.outcome) {
+      case 'pushed':
+        return `+ ${name}: отправлено в origin (ahead ${entry.item.aheadBefore})`;
+      case 'nothingToPush':
+        return `- ${name}: нет ahead-коммитов`;
+      case 'notRepo':
+        return `- ${name}: не git-репозиторий`;
+      default:
+        return `x ${name}: ${entry.item.message}`;
+    }
+  });
+  return lines.join('\n') || 'Нет добавленных проектов.';
 }
 
 function onTabClick(event) {

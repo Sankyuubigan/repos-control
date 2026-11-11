@@ -232,6 +232,45 @@ pub async fn push_changes(
     .await
 }
 
+/// Итог массового пуша по одному проекту: решение домена + снапшот статуса
+/// (для мгновенной перерисовки бейджей без лишних запросов с фронта).
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PushAllReportEntry {
+    pub item: usecases::PushAllItem,
+    pub snapshot: StatusSnapshot,
+}
+
+#[tauri::command]
+pub async fn push_all_changes(
+    services: State<'_, Services>,
+) -> Result<Vec<PushAllReportEntry>, String> {
+    let inner = services.inner();
+    let config = Arc::clone(&inner.config);
+    let status = Arc::clone(&inner.status);
+    let write_git = Arc::clone(&inner.write_git);
+    let writes = Arc::clone(&inner.writes);
+    tauri::async_runtime::spawn_blocking(move || {
+        let paths: Vec<PathBuf> = config.list_projects().into_iter().map(|p| p.path).collect();
+        let mut report = Vec::with_capacity(paths.len());
+        for path in paths {
+            let _guard = writes.begin(&path);
+            let before = status.read_blocking(&path);
+            let item =
+                usecases::backup_push(&before.status, write_git.as_ref(), Path::new(&path));
+            let snapshot = if item.outcome == usecases::PushAllOutcome::Pushed {
+                status.read_blocking(&path)
+            } else {
+                before
+            };
+            report.push(PushAllReportEntry { snapshot, item });
+        }
+        Ok(report)
+    })
+    .await
+    .map_err(|err| format!("Ошибка фоновой задачи: {err}"))?
+}
+
 #[tauri::command]
 pub async fn add_to_gitignore(
     services: State<'_, Services>,
